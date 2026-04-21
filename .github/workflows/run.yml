@@ -1,0 +1,27 @@
+name: CPBC 주차장 모니터링
+
+on:
+  schedule:
+    - cron: '0 0 * * *'   # 매일 오전 9시 (UTC 0시 = KST 9시)
+  workflow_dispatch:        # 수동 실행 버튼도 활성화
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 설치
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 라이브러리 설치
+        run: pip install -r requirements.txt
+
+      - name: credentials.json 생성
+        run: echo '${{ secrets.GOOGLE_CREDENTIALS }}' > credentials.json
+
+      - name: 주차장 데이터 수집 및 Sheets 기록
+        run: python main.py
