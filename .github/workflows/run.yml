@@ -3,10 +3,15 @@ name: CPBC 주차장 모니터링
 on:
   schedule:
     - cron: '0 0 * * *'   # 매일 오전 9시 (UTC 0시 = KST 9시)
-  workflow_dispatch:        # 수동 실행 버튼도 활성화
+  workflow_dispatch:        # 수동 실행 버튼
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
 
 jobs:
-  collect:
+  collect-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: 저장소 체크아웃
@@ -23,5 +28,18 @@ jobs:
       - name: credentials.json 생성
         run: echo '${{ secrets.GOOGLE_CREDENTIALS }}' > credentials.json
 
-      - name: 주차장 데이터 수집 및 Sheets 기록
+      - name: 주차장 데이터 수집 및 대시보드 생성
         run: python main.py
+
+      - name: 대시보드 HTML을 docs 폴더로 복사
+        run: |
+          mkdir -p docs
+          cp modu_dashboard.html docs/index.html
+
+      - name: GitHub에 대시보드 push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/index.html
+          git diff --staged --quiet || git commit -m "대시보드 업데이트 $(date '+%Y-%m-%d %H:%M')"
+          git push
