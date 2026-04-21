@@ -193,53 +193,6 @@ def write_sheets(gc, lots, tickets, changes, now_str):
 
     print(f"  요금 {len(price_rows)}행 / 할인권 {len(ticket_rows)}행 / 변경 {len(changes)}건")
 
-# ── 메인 ────────────────────────────────────────────────────
-if __name__ == "__main__":
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{now_str}] 모두의주차 API 수집 중...")
-
-    raw = fetch_api()
-    lots, tickets = parse(raw)
-    print(f"  주차장 {len(lots)}개 / 할인권 {len(tickets)}개 수집")
-
-    old_snap = load_snap()
-    changes  = compare(old_snap, lots, tickets)
-
-    # 스냅샷 이력 관리 (최대 365개)
-    hist_file = os.path.join(BASE_DIR, "history.json")
-    if os.path.exists(hist_file):
-        with open(hist_file, "r", encoding="utf-8") as f:
-            snap_history = json.load(f)
-    else:
-        snap_history = []
-
-    snap_history.append({"ts": now_str})
-    if len(snap_history) > 365:
-        snap_history = snap_history[-365:]
-    with open(hist_file, "w", encoding="utf-8") as f:
-        json.dump(snap_history, f, ensure_ascii=False)
-
-    save_snap(lots, tickets)
-
-    if changes:
-        print(f"  🔔 변경사항 {len(changes)}건:")
-        for c in changes:
-            print(f"    [{c['kind']}] {c['name']} - {c['desc']}")
-    else:
-        print("  변경사항 없음")
-
-    print("Google Sheets 기록 중...")
-    gc = get_gc()
-    write_sheets(gc, lots, tickets, changes, now_str)
-
-    print("대시보드 HTML 생성 중...")
-    html = build_html(lots, tickets, changes, snap_history, now_str, SHEET_ID)
-    html_path = os.path.join(BASE_DIR, "modu_dashboard.html")
-    with open(html_path, "w", encoding="utf-8") as f:
-        f.write(html)
-    print(f"  HTML 생성 완료: {html_path}")
-    print("완료!")
-
 
 # ── HTML 대시보드 생성 ───────────────────────────────────────
 def build_html(lots, tickets, changes, snap_history, now_str, sheet_id):
@@ -474,3 +427,51 @@ rP();rT();
 </script>
 </body>
 </html>"""
+
+
+# ── 메인 ────────────────────────────────────────────────────
+if __name__ == "__main__":
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{now_str}] 모두의주차 API 수집 중...")
+
+    raw = fetch_api()
+    lots, tickets = parse(raw)
+    print(f"  주차장 {len(lots)}개 / 할인권 {len(tickets)}개 수집")
+
+    old_snap = load_snap()
+    changes  = compare(old_snap, lots, tickets)
+
+    # 스냅샷 이력 관리 (최대 365개)
+    hist_file = os.path.join(BASE_DIR, "history.json")
+    if os.path.exists(hist_file):
+        with open(hist_file, "r", encoding="utf-8") as f:
+            snap_history = json.load(f)
+    else:
+        snap_history = []
+
+    snap_history.append({"ts": now_str})
+    if len(snap_history) > 365:
+        snap_history = snap_history[-365:]
+    with open(hist_file, "w", encoding="utf-8") as f:
+        json.dump(snap_history, f, ensure_ascii=False)
+
+    save_snap(lots, tickets)
+
+    if changes:
+        print(f"  🔔 변경사항 {len(changes)}건:")
+        for c in changes:
+            print(f"    [{c['kind']}] {c['name']} - {c['desc']}")
+    else:
+        print("  변경사항 없음")
+
+    print("Google Sheets 기록 중...")
+    gc = get_gc()
+    write_sheets(gc, lots, tickets, changes, now_str)
+
+    print("대시보드 HTML 생성 중...")
+    html = build_html(lots, tickets, changes, snap_history, now_str, SHEET_ID)
+    html_path = os.path.join(BASE_DIR, "modu_dashboard.html")
+    with open(html_path, "w", encoding="utf-8") as f:
+        f.write(html)
+    print(f"  HTML 생성 완료: {html_path}")
+    print("완료!")
