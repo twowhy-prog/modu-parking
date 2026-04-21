@@ -204,6 +204,21 @@ if __name__ == "__main__":
 
     old_snap = load_snap()
     changes  = compare(old_snap, lots, tickets)
+
+    # 스냅샷 이력 관리 (최대 365개)
+    hist_file = os.path.join(BASE_DIR, "history.json")
+    if os.path.exists(hist_file):
+        with open(hist_file, "r", encoding="utf-8") as f:
+            snap_history = json.load(f)
+    else:
+        snap_history = []
+
+    snap_history.append({"ts": now_str})
+    if len(snap_history) > 365:
+        snap_history = snap_history[-365:]
+    with open(hist_file, "w", encoding="utf-8") as f:
+        json.dump(snap_history, f, ensure_ascii=False)
+
     save_snap(lots, tickets)
 
     if changes:
@@ -216,4 +231,246 @@ if __name__ == "__main__":
     print("Google Sheets 기록 중...")
     gc = get_gc()
     write_sheets(gc, lots, tickets, changes, now_str)
+
+    print("대시보드 HTML 생성 중...")
+    html = build_html(lots, tickets, changes, snap_history, now_str, SHEET_ID)
+    html_path = os.path.join(BASE_DIR, "modu_dashboard.html")
+    with open(html_path, "w", encoding="utf-8") as f:
+        f.write(html)
+    print(f"  HTML 생성 완료: {html_path}")
     print("완료!")
+
+
+# ── HTML 대시보드 생성 ───────────────────────────────────────
+def build_html(lots, tickets, changes, snap_history, now_str, sheet_id):
+    lots_json    = json.dumps(lots,    ensure_ascii=False)
+    tickets_json = json.dumps(tickets, ensure_ascii=False)
+    sheets_url   = f"https://docs.google.com/spreadsheets/d/{sheet_id}"
+
+    if not snap_history or len(snap_history) <= 1:
+        change_html  = '<div class="empty"><span>💾</span><p>기준 데이터 저장됨. 다음 실행부터 변경사항을 감지합니다.</p></div>'
+        change_count = "-"
+        first_ts     = now_str
+        snap_count   = 1
+    else:
+        snap_count = len(snap_history)
+        first_ts   = snap_history[0].get("ts", now_str)
+        if not changes:
+            change_html  = '<div class="empty"><span>✓</span><p>변경사항이 없습니다</p></div>'
+            change_count = "없음"
+        else:
+            change_count = f"{len(changes)}건"
+            kc = {"요금변경":"#F59E0B","할인권신규":"#10B981","할인권삭제":"#EF4444",
+                  "할인권상태변경":"#818CF8","할인권품절":"#94A3B8","삭제":"#EF4444"}
+            change_html = "".join(f"""
+            <div class="change-row">
+              <span class="change-badge" style="background:{kc.get(c['kind'],'#94A3B8')}22;color:{kc.get(c['kind'],'#94A3B8')};border-color:{kc.get(c['kind'],'#94A3B8')}44">{c['kind']}</span>
+              <div><div class="change-name">{c['name']}</div><div class="change-desc">{c['desc']}</div></div>
+            </div>""" for c in changes)
+
+    partners  = sum(1 for l in lots if l["partner"])
+    with_tick = len(set(t["lot"] for t in tickets))
+    cheap     = [l for l in lots if l.get("p60") and l["p60"] > 0]
+    min_p     = cheap[0] if cheap else None
+
+    return f"""<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CPBC 주변 주차장 현황</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+:root{{--bg:#0A0E1A;--s1:#111827;--s2:#1C2333;--bd:#2A3550;--blue:#3B82F6;--green:#10B981;--yellow:#F59E0B;--red:#EF4444;--t1:#F1F5F9;--t2:#94A3B8;--t3:#64748B;--mono:'JetBrains Mono',monospace}}
+body{{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--t1);min-height:100vh}}
+body::before{{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(59,130,246,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(59,130,246,.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none}}
+.wrap{{position:relative;z-index:1;max-width:1400px;margin:0 auto;padding:20px}}
+.hdr{{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--bd);flex-wrap:wrap;gap:10px}}
+.hdr-l{{display:flex;align-items:center;gap:12px}}
+.logo{{width:40px;height:40px;background:linear-gradient(135deg,var(--blue),#6366F1);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 0 20px rgba(59,130,246,.3);flex-shrink:0}}
+.hdr h1{{font-size:16px;font-weight:700;letter-spacing:-.5px}}.hdr p{{font-size:11px;color:var(--t3);margin-top:2px}}
+.hdr-r{{display:flex;align-items:center;gap:8px;flex-wrap:wrap}}
+.badge{{font-family:var(--mono);font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid var(--bd);color:var(--t2);white-space:nowrap}}
+.badge.ok{{border-color:var(--green);color:var(--green)}}.badge.ok::before{{content:'● ';}}
+.badge.sheets{{border-color:#34A853;color:#34A853;text-decoration:none;display:inline-flex;align-items:center;gap:4px}}
+.kpi{{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px}}
+.kcard{{background:var(--s1);border:1px solid var(--bd);border-radius:12px;padding:14px 16px;position:relative;overflow:hidden}}
+.kcard::before{{content:'';position:absolute;top:0;left:0;right:0;height:2px}}
+.kcard.b::before{{background:var(--blue)}}.kcard.g::before{{background:var(--green)}}.kcard.y::before{{background:var(--yellow)}}.kcard.r::before{{background:var(--red)}}.kcard.p::before{{background:#8B5CF6}}
+.kl{{font-size:10px;color:var(--t3);font-weight:600;letter-spacing:.6px;text-transform:uppercase}}
+.kv{{font-family:var(--mono);font-size:24px;font-weight:700;margin:4px 0 2px;letter-spacing:-1px}}
+.kv.b{{color:var(--blue)}}.kv.g{{color:var(--green)}}.kv.y{{color:var(--yellow)}}.kv.r{{color:var(--red)}}.kv.p{{color:#8B5CF6}}
+.ks{{font-size:10px;color:var(--t3)}}
+.grid{{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}}
+@media(max-width:700px){{.grid{{grid-template-columns:1fr}}}}
+.full{{grid-column:1/-1}}
+.panel{{background:var(--s1);border:1px solid var(--bd);border-radius:12px;overflow:hidden}}
+.ph{{padding:12px 16px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between}}
+.pt{{font-size:12px;font-weight:600;display:flex;align-items:center;gap:7px}}
+.dot{{width:6px;height:6px;border-radius:50%;display:inline-block;flex-shrink:0}}
+.dot.b{{background:var(--blue)}}.dot.g{{background:var(--green)}}.dot.y{{background:var(--yellow)}}
+.pc{{font-family:var(--mono);font-size:11px;color:var(--t3)}}
+.fb{{padding:8px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:4px;flex-wrap:wrap;background:var(--s2)}}
+.fb-btn{{font-family:'Noto Sans KR',sans-serif;font-size:11px;padding:3px 8px;border-radius:20px;border:1px solid var(--bd);background:transparent;color:var(--t3);cursor:pointer;transition:all .15s;white-space:nowrap}}
+.fb-btn:hover,.fb-btn.on{{border-color:var(--blue);color:var(--blue);background:rgba(59,130,246,.12);font-weight:600}}
+.fb-search{{font-family:'Noto Sans KR',sans-serif;font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid var(--bd);background:var(--bg);color:var(--t1);outline:none;margin-left:auto;width:110px}}
+.fb-search:focus{{border-color:var(--blue)}}.fb-search::placeholder{{color:var(--t3)}}
+.sw{{padding:6px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:8px;background:var(--s2)}}
+.sl{{font-size:11px;color:var(--t3);white-space:nowrap}}
+.sv{{font-family:var(--mono);font-size:11px;color:var(--blue);width:44px;text-align:right;white-space:nowrap}}
+input[type=range]{{flex:1;-webkit-appearance:none;height:3px;border-radius:2px;background:var(--bd);outline:none;cursor:pointer}}
+input[type=range]::-webkit-slider-thumb{{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--blue);cursor:pointer}}
+.tw{{overflow:auto;max-height:320px}}
+table{{width:100%;border-collapse:collapse;font-size:12px}}
+thead th{{padding:8px 10px;text-align:left;font-size:10px;font-weight:600;color:var(--t3);letter-spacing:.6px;text-transform:uppercase;background:var(--s1);position:sticky;top:0;z-index:1;white-space:nowrap;cursor:pointer;user-select:none}}
+thead th:hover{{color:var(--t1)}}
+thead th.sa::after{{content:' ▲';color:var(--blue);font-size:9px}}
+thead th.sd::after{{content:' ▼';color:var(--blue);font-size:9px}}
+tbody tr{{border-bottom:1px solid rgba(42,53,80,.5);transition:background .12s}}
+tbody tr:hover{{background:var(--s2)}}
+tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
+.nc{{color:var(--t1);font-weight:500;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+.dist{{font-family:var(--mono);font-size:10px;background:var(--s2);border:1px solid var(--bd);padding:2px 5px;border-radius:4px;color:var(--t3)}}
+.p{{font-family:var(--mono);font-size:11px}}
+.p.free{{color:var(--green);font-weight:700}}.p.low{{color:var(--green)}}.p.mid{{color:var(--t2)}}.p.high{{color:var(--red)}}
+.tc{{font-size:11px;color:var(--t3);max-width:130px;overflow:hidden;text-overflow:ellipsis}}
+.rdim td{{opacity:.42}}
+.tag{{font-size:9px;padding:2px 5px;border-radius:3px;font-weight:600;display:inline-block}}
+.tag.partner{{background:rgba(59,130,246,.15);color:var(--blue);border:1px solid rgba(59,130,246,.3)}}
+.tag.open{{background:rgba(16,185,129,.15);color:var(--green);border:1px solid rgba(16,185,129,.3)}}
+.tag.closed{{background:rgba(100,116,139,.15);color:var(--t3);border:1px solid var(--bd)}}
+.tag.soldout{{background:rgba(245,158,11,.15);color:var(--yellow);border:1px solid rgba(245,158,11,.3)}}
+.change-row{{padding:9px 16px;border-bottom:1px solid rgba(42,53,80,.4);display:flex;align-items:flex-start;gap:8px;font-size:12px}}
+.change-badge{{font-size:9px;padding:2px 6px;border-radius:3px;font-weight:700;border:1px solid;white-space:nowrap;flex-shrink:0;margin-top:1px}}
+.change-name{{color:var(--t1);font-weight:500}}.change-desc{{color:var(--t3);margin-top:2px;font-size:11px}}
+.empty{{padding:36px;text-align:center;color:var(--t3)}}.empty span{{font-size:28px;display:block;margin-bottom:8px;opacity:.4}}.empty p{{font-size:12px}}
+.sb{{padding:6px 12px;font-size:11px;color:var(--t3);border-top:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center}}
+.sb a{{color:#34A853;text-decoration:none;font-size:11px}}.sb a:hover{{text-decoration:underline}}
+::-webkit-scrollbar{{width:4px;height:4px}}::-webkit-scrollbar-thumb{{background:var(--bd);border-radius:2px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <div class="hdr-l">
+      <div class="logo">🅿</div>
+      <div><h1>CPBC 주변 주차장 현황</h1><p>삼일대로 330 기준 반경 800m · 모두의주차 데이터</p></div>
+    </div>
+    <div class="hdr-r">
+      <span class="badge">{now_str}</span>
+      <a href="{sheets_url}" target="_blank" class="badge sheets">📊 Sheets 이력</a>
+      <span class="badge ok">최신</span>
+    </div>
+  </div>
+  <div class="kpi">
+    <div class="kcard b"><div class="kl">주차장 수</div><div class="kv b">{len(lots)}</div><div class="ks">반경 800m 이내</div></div>
+    <div class="kcard g"><div class="kl">파트너</div><div class="kv g">{partners}</div><div class="ks">앱 결제 가능</div></div>
+    <div class="kcard y"><div class="kl">할인권 보유</div><div class="kv y">{with_tick}</div><div class="ks">개 주차장</div></div>
+    <div class="kcard r"><div class="kl">최저 1시간</div><div class="kv r">{f"{min_p['p60']:,}원" if min_p else "-"}</div><div class="ks">{min_p['name'][:12] if min_p else "-"}</div></div>
+    <div class="kcard p"><div class="kl">누적 기록</div><div class="kv p">{snap_count}</div><div class="ks">회 ({first_ts[:10]}~)</div></div>
+  </div>
+  <div class="grid">
+    <div class="panel" id="pp">
+      <div class="ph"><div class="pt"><span class="dot b"></span>요금 현황</div><span class="pc" id="p-cnt"></span></div>
+      <div class="fb">
+        <button class="fb-btn on" onclick="pF('all',this)">전체</button>
+        <button class="fb-btn" onclick="pF('partner',this)">파트너</button>
+        <button class="fb-btn" onclick="pF('cheap',this)">저렴 ≤4천</button>
+        <input class="fb-search" id="ps" placeholder="🔍 검색..." oninput="rP()">
+      </div>
+      <div class="sw">
+        <span class="sl">거리</span>
+        <input type="range" id="pd" min="100" max="800" step="50" value="800" oninput="document.getElementById('pdv').textContent=this.value+'m';rP()">
+        <span class="sv" id="pdv">800m</span>
+      </div>
+      <div class="tw"><table>
+        <thead><tr>
+          <th id="ph0" onclick="sP('name')">주차장명</th>
+          <th id="ph1" onclick="sP('dist')">거리</th>
+          <th id="ph2" onclick="sP('p30')">30분</th>
+          <th id="ph3" onclick="sP('p60')">1시간</th>
+          <th id="ph4" onclick="sP('p120')">2시간</th>
+          <th id="ph5" onclick="sP('p180')">3시간</th>
+        </tr></thead>
+        <tbody id="pb"></tbody>
+      </table></div>
+      <div class="sb"><span id="p-st"></span><a href="{sheets_url}" target="_blank">📊 전체 이력 →</a></div>
+    </div>
+    <div class="panel" id="tp">
+      <div class="ph"><div class="pt"><span class="dot g"></span>할인권·선불권</div><span class="pc" id="t-cnt"></span></div>
+      <div class="fb">
+        <button class="fb-btn" onclick="tF('all',this)">전체</button>
+        <button class="fb-btn on" onclick="tF('open',this)">판매중</button>
+        <button class="fb-btn" onclick="tF('night',this)">심야</button>
+        <button class="fb-btn" onclick="tF('day',this)">당일</button>
+        <button class="fb-btn" onclick="tF('hour',this)">시간권</button>
+        <button class="fb-btn" onclick="tF('month',this)">월정기</button>
+        <input class="fb-search" id="ts" placeholder="🔍 검색..." oninput="rT()">
+      </div>
+      <div class="sw">
+        <span class="sl">거리</span>
+        <input type="range" id="td" min="100" max="800" step="50" value="800" oninput="document.getElementById('tdv').textContent=this.value+'m';rT()">
+        <span class="sv" id="tdv">800m</span>
+      </div>
+      <div class="tw"><table>
+        <thead><tr>
+          <th id="th0" onclick="sT('lot')">주차장명</th>
+          <th id="th1" onclick="sT('dist')">거리</th>
+          <th id="th2" onclick="sT('name')">권종명</th>
+          <th id="th3" onclick="sT('price')">가격</th>
+          <th>이용시간대</th>
+          <th>상태</th>
+        </tr></thead>
+        <tbody id="tb"></tbody>
+      </table></div>
+      <div class="sb"><span id="t-st"></span><a href="{sheets_url}" target="_blank">📊 이력 →</a></div>
+    </div>
+    <div class="panel full">
+      <div class="ph"><div class="pt"><span class="dot y"></span>변경사항 감지</div><span class="pc">{change_count}</span></div>
+      {change_html}
+      <div class="sb"><span>누적 {snap_count}회 기록 ({first_ts[:10]}~)</span><a href="{sheets_url}" target="_blank">📊 변경이력 전체 →</a></div>
+    </div>
+  </div>
+</div>
+<script>
+const LOTS={lots_json};
+const TICKETS={tickets_json};
+let pFlt='all',pSK='p60',pSA=true;
+let tFlt='open',tSK='dist',tSA=true;
+function fp(v){{if(v==null)return'-';if(v===0)return'무료';return v.toLocaleString()+'원';}}
+function pc(v){{if(v==null)return'';if(v===0)return'free';if(v<=3000)return'low';if(v<=6000)return'mid';return'high';}}
+function pF(f,el){{pFlt=f;document.querySelectorAll('#pp .fb-btn').forEach(b=>b.classList.remove('on'));el.classList.add('on');rP();}}
+function sP(k){{if(pSK===k)pSA=!pSA;else{{pSK=k;pSA=true;}}rP();}}
+function rP(){{
+  const s=document.getElementById('ps').value.toLowerCase();
+  const md=+document.getElementById('pd').value;
+  let d=LOTS.filter(l=>{{if(l.dist>md)return false;if(pFlt==='partner'&&!l.partner)return false;if(pFlt==='cheap'&&(l.p60==null||l.p60>4000))return false;if(s&&!l.name.toLowerCase().includes(s))return false;return true;}});
+  d.sort((a,b)=>{{let av=a[pSK],bv=b[pSK];if(av==null)av=99999;if(bv==null)bv=99999;if(typeof av==='string')return pSA?av.localeCompare(bv):bv.localeCompare(av);return pSA?av-bv:bv-av;}});
+  const km={{name:0,dist:1,p30:2,p60:3,p120:4,p180:5}};
+  [0,1,2,3,4,5].forEach(i=>{{const th=document.getElementById('ph'+i);th.className='';if(km[pSK]===i)th.className=pSA?'sa':'sd';}});
+  document.getElementById('p-cnt').textContent=d.length+'개소';
+  document.getElementById('p-st').textContent=`전체 ${{LOTS.length}}개 중 ${{d.length}}개`;
+  const tb=document.getElementById('pb');
+  if(!d.length){{tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">없음</td></tr>';return;}}
+  tb.innerHTML=d.map(l=>`<tr><td class="nc">${{l.name}}${{l.partner?' <span class="tag partner">파트너</span>':''}}</td><td><span class="dist">${{l.dist}}m</span></td><td class="p ${{pc(l.p30)}}">${{fp(l.p30)}}</td><td class="p ${{pc(l.p60)}}">${{fp(l.p60)}}</td><td class="p ${{pc(l.p120)}}">${{fp(l.p120)}}</td><td class="p ${{pc(l.p180)}}">${{fp(l.p180)}}</td></tr>`).join('');
+}}
+function tF(f,el){{tFlt=f;document.querySelectorAll('#tp .fb-btn').forEach(b=>b.classList.remove('on'));el.classList.add('on');rT();}}
+function sT(k){{if(tSK===k)tSA=!tSA;else{{tSK=k;tSA=true;}}rT();}}
+function rT(){{
+  const s=document.getElementById('ts').value.toLowerCase();
+  const md=+document.getElementById('td').value;
+  let d=TICKETS.filter(t=>{{if(t.dist>md)return false;if(tFlt==='open'&&(!t.open||t.soldout))return false;if(tFlt==='closed'&&t.open)return false;if(tFlt==='soldout'&&!t.soldout)return false;if(tFlt==='night'&&!t.name.includes('심야'))return false;if(tFlt==='day'&&!t.name.includes('당일'))return false;if(tFlt==='hour'&&!/(시간|h)/i.test(t.name))return false;if(tFlt==='month'&&!t.name.includes('월'))return false;if(s&&!t.lot.toLowerCase().includes(s)&&!t.name.toLowerCase().includes(s))return false;return true;}});
+  d.sort((a,b)=>{{let av=a[tSK],bv=b[tSK];if(typeof av==='string')return tSA?av.localeCompare(bv):bv.localeCompare(av);return tSA?av-bv:bv-av;}});
+  const km={{lot:0,dist:1,name:2,price:3}};
+  [0,1,2,3].forEach(i=>{{const th=document.getElementById('th'+i);th.className='';if(km[tSK]===i)th.className=tSA?'sa':'sd';}});
+  document.getElementById('t-cnt').textContent=d.length+'개';
+  document.getElementById('t-st').textContent=`전체 ${{TICKETS.length}}개 중 ${{d.length}}개`;
+  const tb=document.getElementById('tb');
+  if(!d.length){{tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">없음</td></tr>';return;}}
+  tb.innerHTML=d.map(t=>{{const st=t.soldout?'<span class="tag soldout">품절</span>':t.open?'<span class="tag open">판매중</span>':'<span class="tag closed">비판매</span>';return`<tr class="${{(!t.open||t.soldout)?'rdim':''}}"><td class="nc">${{t.lot}}${{t.partner?' <span class="tag partner">파트너</span>':''}}</td><td><span class="dist">${{t.dist}}m</span></td><td>${{t.name}}</td><td class="p mid">${{t.price.toLocaleString()}}원</td><td class="tc">${{t.time}}</td><td>${{st}}</td></tr>`;}}).join('');
+}}
+rP();rT();
+</script>
+</body>
+</html>"""
