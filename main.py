@@ -268,8 +268,44 @@ def analyze_tickets(tickets):
     return analysis, summary, avgs
 
 
+# ── AI 전략 분석 ─────────────────────────────────────────────
+def get_ai_insight(summary, cpbc_tickets):
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        return None
+    try:
+        from google import genai
+        client = genai.Client(api_key=api_key)
+    except ImportError:
+        return "⚠️ 로컬 환경에 google-genai 라이브러리가 설치되지 않아 AI 분석을 건너뜁니다."
+    except Exception as e:
+        return f"⚠️ AI 클라이언트 초기화 오류: {str(e)}"
+
+    prompt = f"""
+당신은 주차장 요금 전략을 분석하는 전문가입니다.
+현재 '평화빌딩' 주차장의 할인권 판매 가격과, 반경 500m 이내 주변 파트너 주차장들의 평균 할인권 가격 데이터를 드립니다.
+
+[주변 주차장 권종별 평균가 (500m 이내)]
+{json.dumps(summary, ensure_ascii=False, indent=2)}
+
+[평화빌딩 주차장 현재 할인권]
+{json.dumps([t for t in cpbc_tickets if t['price'] > 0], ensure_ascii=False, indent=2)}
+
+위 데이터를 바탕으로, 평화빌딩 주차장의 요금이 주변 대비 얼마나 경쟁력이 있는지 판단하고, 수익을 최적화하기 위한 구체적인 가격 조정 전략이나 유지 전략을 3~4문장으로 요약해서 제안해 주세요.
+어조는 전문적이고 핵심만 간결하게 전달해야 합니다. 마크다운을 사용하지 말고 순수 텍스트(혹은 간단한 이모지)로 작성해 주세요.
+"""
+    try:
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+        )
+        return response.text.strip().replace('\n', '<br>')
+    except Exception as e:
+        return f"⚠️ AI 분석 중 오류가 발생했습니다: {str(e)}"
+
+
 # ── HTML 대시보드 생성 ───────────────────────────────────────
-def build_html(lots, tickets, changes, snap_history, now_str, sheet_id, analysis=None, summary=None):
+def build_html(lots, tickets, changes, snap_history, now_str, sheet_id, analysis=None, summary=None, ai_insight=None):
     lots_json    = json.dumps(lots,    ensure_ascii=False)
     tickets_json = json.dumps(tickets, ensure_ascii=False)
     sheets_url   = f"https://docs.google.com/spreadsheets/d/{sheet_id}"
@@ -320,6 +356,11 @@ def build_html(lots, tickets, changes, snap_history, now_str, sheet_id, analysis
         )
     else:
         analysis_rows = '<div style="color:var(--t3);font-size:12px;padding:12px 16px">평화빌딩 주차장 판매중 할인권 없음</div>'
+
+    if ai_insight:
+        ai_html = f'<div style="margin:16px;padding:14px;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);border-radius:8px;font-size:12px;color:var(--t1);line-height:1.6;"><strong>🤖 AI 가격 전략 리포트</strong><div style="color:var(--t2);margin-top:6px;">{ai_insight}</div></div>'
+    else:
+        ai_html = ""
 
     partners  = sum(1 for l in lots if l["partner"])
     with_tick = len(set(t["lot"] for t in tickets))
@@ -507,6 +548,7 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
         {summary_html}
       </div>
       <div>{analysis_rows}</div>
+      {ai_html}
       <div class="sb"><span>평화빌딩 주차장 할인권 적정성 검토</span><span style="color:var(--t3)">±20% 기준 판단</span></div>
     </div>
   </div>
@@ -599,8 +641,16 @@ if __name__ == "__main__":
     for a in analysis:
         print(f"  [{a['label']}] {a['name']} {a['price']:,}원 - {a['comment']}")
 
+    print("AI 전략 분석 중...")
+    cpbc_tickets = [t for t in tickets if "평화빌딩" in t["lot"] and t["open"] and not t["soldout"]]
+    ai_insight = get_ai_insight(summary, cpbc_tickets)
+    if ai_insight:
+        print("  🤖 AI 분석 완료")
+    else:
+        print("  AI 분석 건너뜀 (API 키 없음)")
+
     print("대시보드 HTML 생성 중...")
-    html = build_html(lots, tickets, changes, snap_history, now_str, SHEET_ID, analysis, summary)
+    html = build_html(lots, tickets, changes, snap_history, now_str, SHEET_ID, analysis, summary, ai_insight)
     html_path = os.path.join(BASE_DIR, "modu_dashboard.html")
     with open(html_path, "w", encoding="utf-8") as f:
         f.write(html)

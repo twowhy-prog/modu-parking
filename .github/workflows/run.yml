@@ -31,6 +31,8 @@ jobs:
         run: echo '${{ secrets.GOOGLE_CREDENTIALS }}' > credentials.json
 
       - name: 주차장 데이터 수집 및 대시보드 생성
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python main.py
 
       - name: 대시보드 HTML을 docs 폴더로 복사
