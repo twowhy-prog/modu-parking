@@ -493,9 +493,9 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
       <div class="sb"><span id="t-st"></span><a href="{sheets_url}" target="_blank">📊 이력 →</a></div>
     </div>
     <div class="panel full">
-      <div class="ph"><div class="pt"><span class="dot y"></span>변경사항 감지</div><span class="pc">{{change_count}}</span></div>
-      {{change_html}}
-      <div class="sb"><span>누적 {{snap_count}}회 기록 ({{first_ts[:10]}}~)</span><a href="{{sheets_url}}" target="_blank">📊 변경이력 전체 →</a></div>
+      <div class="ph"><div class="pt"><span class="dot y"></span>변경사항 감지</div><span class="pc">{change_count}</span></div>
+      {change_html}
+      <div class="sb"><span>누적 {snap_count}회 기록 ({first_ts[:10]}~)</span><a href="{sheets_url}" target="_blank">📊 변경이력 전체 →</a></div>
     </div>
     <div class="panel full">
       <div class="ph">
@@ -504,9 +504,9 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
       </div>
       <div class="ana-summary">
         <span style="font-size:11px;color:var(--t3);margin-right:4px">주변 평균가</span>
-        {{summary_html}}
+        {summary_html}
       </div>
-      <div>{{analysis_rows}}</div>
+      <div>{analysis_rows}</div>
       <div class="sb"><span>평화빌딩 주차장 할인권 적정성 검토</span><span style="color:var(--t3)">±20% 기준 판단</span></div>
     </div>
   </div>
