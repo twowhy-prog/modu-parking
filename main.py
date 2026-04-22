@@ -194,8 +194,82 @@ def write_sheets(gc, lots, tickets, changes, now_str):
     print(f"  요금 {len(price_rows)}행 / 할인권 {len(ticket_rows)}행 / 변경 {len(changes)}건")
 
 
+# ── 할인권 적정성 분석 ───────────────────────────────────────
+def analyze_tickets(tickets):
+    """
+    500m 이내 파트너 주차장 할인권 기준으로 권종별 적정성 분석
+    - 당일권 / 3시간권 / 기타 로 분류
+    - 평균가 대비 ±20% 기준으로 저렴/적정/비쌈 판단
+    """
+    PARTNER_RADIUS = 500
+
+    def categorize(name):
+        if "당일" in name: return "당일권"
+        if "3시간" in name: return "3시간권"
+        return "기타"
+
+    def judge(price, avg):
+        if avg == 0: return None
+        ratio = price / avg
+        if ratio < 0.8:   return ("저렴", "#10B981", f"주변 평균({avg:,}원) 대비 {(1-ratio)*100:.0f}% 저렴 ✅ 경쟁력 있음")
+        if ratio <= 1.2:  return ("적정", "#3B82F6", f"주변 평균({avg:,}원) 대비 적정 수준 👍")
+        return           ("비쌈", "#EF4444", f"주변 평균({avg:,}원) 대비 {(ratio-1)*100:.0f}% 높음 ⚠️ 조정 검토 필요")
+
+    # 500m 이내 파트너 주차장 할인권만 수집 (판매중 + 비품절)
+    partner_tickets = [t for t in tickets
+                       if t["partner"] and t["dist"] <= PARTNER_RADIUS
+                       and t["open"] and not t["soldout"] and t["price"] > 0]
+
+    # 권종별 가격 그룹핑
+    by_cat = {"당일권": [], "3시간권": [], "기타": []}
+    for t in partner_tickets:
+        by_cat[categorize(t["name"])].append(t["price"])
+
+    # 평균가 계산
+    avgs = {}
+    for cat, prices in by_cat.items():
+        avgs[cat] = int(sum(prices) / len(prices)) if prices else 0
+
+    # CPBC(평화빌딩) 할인권 분석
+    cpbc_tickets = [t for t in tickets if "평화빌딩" in t["lot"] and t["open"] and not t["soldout"]]
+
+    analysis = []
+    for t in cpbc_tickets:
+        cat   = categorize(t["name"])
+        avg   = avgs.get(cat, 0)
+        if avg == 0: continue
+        result = judge(t["price"], avg)
+        if not result: continue
+        label, color, comment = result
+        analysis.append({
+            "name":    t["name"],
+            "price":   t["price"],
+            "cat":     cat,
+            "avg":     avg,
+            "label":   label,
+            "color":   color,
+            "comment": comment,
+            "count":   len(by_cat.get(cat, [])),
+        })
+
+    # 전체 파트너 권종별 요약도 반환
+    summary = []
+    for cat in ["당일권", "3시간권", "기타"]:
+        prices = by_cat[cat]
+        if not prices: continue
+        summary.append({
+            "cat":   cat,
+            "avg":   avgs[cat],
+            "min":   min(prices),
+            "max":   max(prices),
+            "count": len(prices),
+        })
+
+    return analysis, summary, avgs
+
+
 # ── HTML 대시보드 생성 ───────────────────────────────────────
-def build_html(lots, tickets, changes, snap_history, now_str, sheet_id):
+def build_html(lots, tickets, changes, snap_history, now_str, sheet_id, analysis=None, summary=None):
     lots_json    = json.dumps(lots,    ensure_ascii=False)
     tickets_json = json.dumps(tickets, ensure_ascii=False)
     sheets_url   = f"https://docs.google.com/spreadsheets/d/{sheet_id}"
@@ -220,6 +294,32 @@ def build_html(lots, tickets, changes, snap_history, now_str, sheet_id):
               <span class="change-badge" style="background:{kc.get(c['kind'],'#94A3B8')}22;color:{kc.get(c['kind'],'#94A3B8')};border-color:{kc.get(c['kind'],'#94A3B8')}44">{c['kind']}</span>
               <div><div class="change-name">{c['name']}</div><div class="change-desc">{c['desc']}</div></div>
             </div>""" for c in changes)
+
+    # 적정성 분석 HTML
+    analysis = analysis or []
+    summary  = summary  or []
+
+    if summary:
+        summary_html = "".join(
+            f'<div class="ana-summary-item"><span class="ana-cat">{s["cat"]}</span>' +
+            f'<span class="ana-range">{s["min"]:,}~{s["max"]:,}원</span>' +
+            f'<span class="ana-avg">평균 {s["avg"]:,}원</span>' +
+            f'<span class="ana-cnt">({s["count"]}개 주차장)</span></div>'
+            for s in summary
+        )
+    else:
+        summary_html = '<span style="color:var(--t3);font-size:11px">500m 이내 파트너 할인권 데이터 없음</span>'
+
+    if analysis:
+        analysis_rows = "".join(
+            f'<div class="ana-row">' +
+            f'<div class="ana-left"><span class="ana-badge" style="background:{a["color"]}22;color:{a["color"]};border:1px solid {a["color"]}44">{a["label"]}</span>' +
+            f'<span class="ana-name">{a["name"]}</span><span class="ana-price">{a["price"]:,}원</span></div>' +
+            f'<div class="ana-comment">{a["comment"]}</div></div>'
+            for a in analysis
+        )
+    else:
+        analysis_rows = '<div style="color:var(--t3);font-size:12px;padding:12px 16px">평화빌딩 주차장 판매중 할인권 없음</div>'
 
     partners  = sum(1 for l in lots if l["partner"])
     with_tick = len(set(t["lot"] for t in tickets))
@@ -300,6 +400,18 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
 .empty{{padding:36px;text-align:center;color:var(--t3)}}.empty span{{font-size:28px;display:block;margin-bottom:8px;opacity:.4}}.empty p{{font-size:12px}}
 .sb{{padding:6px 12px;font-size:11px;color:var(--t3);border-top:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center}}
 .sb a{{color:#34A853;text-decoration:none;font-size:11px}}.sb a:hover{{text-decoration:underline}}
+.ana-summary{{padding:10px 16px;border-bottom:1px solid var(--bd);display:flex;gap:12px;flex-wrap:wrap;background:var(--s2)}}
+.ana-summary-item{{display:flex;align-items:center;gap:6px;font-size:11px}}
+.ana-cat{{font-weight:700;color:var(--t1)}}
+.ana-range{{color:var(--t3);font-family:var(--mono)}}
+.ana-avg{{color:var(--blue);font-family:var(--mono);font-weight:600}}
+.ana-cnt{{color:var(--t3)}}
+.ana-row{{padding:10px 16px;border-bottom:1px solid rgba(42,53,80,.4);display:flex;flex-direction:column;gap:4px}}
+.ana-left{{display:flex;align-items:center;gap:8px}}
+.ana-badge{{font-size:9px;padding:2px 7px;border-radius:3px;font-weight:700;white-space:nowrap}}
+.ana-name{{font-size:12px;color:var(--t1);font-weight:500}}
+.ana-price{{font-family:var(--mono);font-size:12px;color:var(--t2)}}
+.ana-comment{{font-size:11px;color:var(--t3);margin-left:4px}}
 ::-webkit-scrollbar{{width:4px;height:4px}}::-webkit-scrollbar-thumb{{background:var(--bd);border-radius:2px}}
 </style>
 </head>
@@ -380,9 +492,21 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
       <div class="sb"><span id="t-st"></span><a href="{sheets_url}" target="_blank">📊 이력 →</a></div>
     </div>
     <div class="panel full">
-      <div class="ph"><div class="pt"><span class="dot y"></span>변경사항 감지</div><span class="pc">{change_count}</span></div>
-      {change_html}
-      <div class="sb"><span>누적 {snap_count}회 기록 ({first_ts[:10]}~)</span><a href="{sheets_url}" target="_blank">📊 변경이력 전체 →</a></div>
+      <div class="ph"><div class="pt"><span class="dot y"></span>변경사항 감지</div><span class="pc">{{change_count}}</span></div>
+      {{change_html}}
+      <div class="sb"><span>누적 {{snap_count}}회 기록 ({{first_ts[:10]}}~)</span><a href="{{sheets_url}}" target="_blank">📊 변경이력 전체 →</a></div>
+    </div>
+    <div class="panel full">
+      <div class="ph">
+        <div class="pt"><span class="dot" style="background:#8B5CF6"></span>할인권 적정성 분석</div>
+        <span class="pc" style="color:#A78BFA">500m 이내 파트너 기준</span>
+      </div>
+      <div class="ana-summary">
+        <span style="font-size:11px;color:var(--t3);margin-right:4px">주변 평균가</span>
+        {{summary_html}}
+      </div>
+      <div>{{analysis_rows}}</div>
+      <div class="sb"><span>평화빌딩 주차장 할인권 적정성 검토</span><span style="color:var(--t3)">±20% 기준 판단</span></div>
     </div>
   </div>
 </div>
@@ -468,8 +592,13 @@ if __name__ == "__main__":
     gc = get_gc()
     write_sheets(gc, lots, tickets, changes, now_str)
 
+    print("할인권 적정성 분석 중...")
+    analysis, summary, avgs = analyze_tickets(tickets)
+    for a in analysis:
+        print(f"  [{a['label']}] {a['name']} {a['price']:,}원 - {a['comment']}")
+
     print("대시보드 HTML 생성 중...")
-    html = build_html(lots, tickets, changes, snap_history, now_str, SHEET_ID)
+    html = build_html(lots, tickets, changes, snap_history, now_str, SHEET_ID, analysis, summary)
     html_path = os.path.join(BASE_DIR, "modu_dashboard.html")
     with open(html_path, "w", encoding="utf-8") as f:
         f.write(html)
