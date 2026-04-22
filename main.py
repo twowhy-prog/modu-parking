@@ -52,6 +52,8 @@ def parse(raw):
     lots, tickets = [], []
     for group in raw.get("data", []):
         for lot in group.get("parkinglots", []):
+            if "명동아르누보센텀" in lot.get("name", ""):
+                continue
             d = calc_dist(CPBC_LAT, CPBC_LNG,
                           lot.get("latitude", 0), lot.get("longitude", 0))
             if d > RADIUS: continue
