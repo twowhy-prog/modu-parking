@@ -454,6 +454,15 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
 .ana-price{{font-family:var(--mono);font-size:12px;color:var(--t2)}}
 .ana-comment{{font-size:11px;color:var(--t3);margin-left:4px}}
 ::-webkit-scrollbar{{width:4px;height:4px}}::-webkit-scrollbar-thumb{{background:var(--bd);border-radius:2px}}
+#modal-overlay{{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:99;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px)}}
+#modal-box{{background:var(--s1);border:1px solid var(--bd);border-radius:12px;padding:24px;width:320px;max-width:90%;box-shadow:0 10px 30px rgba(0,0,0,.5);position:relative}}
+.m-title{{font-size:16px;font-weight:700;color:var(--t1);margin-bottom:8px}}
+.m-desc{{font-size:12px;color:var(--t2);margin-bottom:20px;line-height:1.5}}
+.m-info{{font-size:12px;color:var(--t3);margin-bottom:4px}}
+.m-btns{{display:flex;gap:10px;justify-content:flex-end;margin-top:24px}}
+.m-btn{{padding:8px 16px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:none}}
+.m-btn.close{{background:var(--s2);color:var(--t2);border:1px solid var(--bd)}}
+.m-btn.ok{{background:var(--blue);color:#FFF}}
 </style>
 </head>
 <body>
@@ -553,6 +562,18 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
     </div>
   </div>
 </div>
+<div id="modal-overlay" onclick="closeModal()">
+  <div id="modal-box" onclick="event.stopPropagation()">
+    <div class="m-title" id="m-title"></div>
+    <div class="m-info" id="m-dist"></div>
+    <div class="m-info" id="m-price"></div>
+    <div class="m-desc" id="m-desc"></div>
+    <div class="m-btns">
+      <button class="m-btn close" onclick="closeModal()">취소</button>
+      <button class="m-btn ok" onclick="goInfoPage()">앱에서 보기</button>
+    </div>
+  </div>
+</div>
 <script>
 const LOTS={lots_json};
 const TICKETS={tickets_json};
@@ -573,7 +594,7 @@ function rP(){{
   document.getElementById('p-st').textContent=`전체 ${{LOTS.length}}개 중 ${{d.length}}개`;
   const tb=document.getElementById('pb');
   if(!d.length){{tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">없음</td></tr>';return;}}
-  tb.innerHTML=d.map(l=>`<tr><td class="nc">${{l.name}}${{l.partner?' <span class="tag partner">파트너</span>':''}}</td><td><span class="dist">${{l.dist}}m</span></td><td class="p ${{pc(l.p30)}}">${{fp(l.p30)}}</td><td class="p ${{pc(l.p60)}}">${{fp(l.p60)}}</td><td class="p ${{pc(l.p120)}}">${{fp(l.p120)}}</td><td class="p ${{pc(l.p180)}}">${{fp(l.p180)}}</td></tr>`).join('');
+  tb.innerHTML=d.map(l=>`<tr onclick="openModal('${{l.name.replace(/'/g,"\\'")}}', ${{l.dist}}, ${{l.partner}}, ${{l.p60!==null?l.p60:'null'}})" style="cursor:pointer"><td class="nc">${{l.name}}${{l.partner?' <span class="tag partner">파트너</span>':''}}</td><td><span class="dist">${{l.dist}}m</span></td><td class="p ${{pc(l.p30)}}">${{fp(l.p30)}}</td><td class="p ${{pc(l.p60)}}">${{fp(l.p60)}}</td><td class="p ${{pc(l.p120)}}">${{fp(l.p120)}}</td><td class="p ${{pc(l.p180)}}">${{fp(l.p180)}}</td></tr>`).join('');
 }}
 function tTglOpen(el){{tOpenOnly=!tOpenOnly;if(tOpenOnly)el.classList.add('on');else el.classList.remove('on');rT();}}
 function tF(f,el){{tFlt=f;document.querySelectorAll('#tp .type-btn').forEach(b=>b.classList.remove('on'));el.classList.add('on');rT();}}
@@ -589,7 +610,21 @@ function rT(){{
   document.getElementById('t-st').textContent=`전체 ${{TICKETS.length}}개 중 ${{d.length}}개`;
   const tb=document.getElementById('tb');
   if(!d.length){{tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">없음</td></tr>';return;}}
-  tb.innerHTML=d.map(t=>{{const st=t.soldout?'<span class="tag soldout">품절</span>':t.open?'<span class="tag open">판매중</span>':'<span class="tag closed">비판매</span>';return`<tr class="${{(!t.open||t.soldout)?'rdim':''}}"><td class="nc">${{t.lot}}${{t.partner?' <span class="tag partner">파트너</span>':''}}</td><td><span class="dist">${{t.dist}}m</span></td><td>${{t.name}}</td><td class="p mid">${{t.price.toLocaleString()}}원</td><td class="tc">${{t.time}}</td><td>${{st}}</td></tr>`;}}).join('');
+  tb.innerHTML=d.map(t=>{{const st=t.soldout?'<span class="tag soldout">품절</span>':t.open?'<span class="tag open">판매중</span>':'<span class="tag closed">비판매</span>';return`<tr class="${{(!t.open||t.soldout)?'rdim':''}}" onclick="openModal('${{t.lot.replace(/'/g,"\\'")}}', ${{t.dist}}, ${{t.partner}}, null)" style="cursor:pointer"><td class="nc">${{t.lot}}${{t.partner?' <span class="tag partner">파트너</span>':''}}</td><td><span class="dist">${{t.dist}}m</span></td><td>${{t.name}}</td><td class="p mid">${{t.price.toLocaleString()}}원</td><td class="tc">${{t.time}}</td><td>${{st}}</td></tr>`;}}).join('');
+}}
+function openModal(name, dist, partner, p60){{
+  document.getElementById('m-title').innerHTML=name+(partner?' <span class="tag partner">파트너</span>':'');
+  document.getElementById('m-dist').textContent='거리: '+dist+'m';
+  document.getElementById('m-price').textContent=p60!==null?'1시간 기본요금: '+fp(p60):'할인권 관련 주차장입니다.';
+  document.getElementById('m-desc').textContent='해당 주차장을 모두의주차장 앱 지도에서 확인하시겠습니까?';
+  document.getElementById('modal-overlay').style.display='flex';
+}}
+function closeModal(){{
+  document.getElementById('modal-overlay').style.display='none';
+}}
+function goInfoPage(){{
+  window.open('https://app.modu.kr/map?utm_source=homepage&utm_medium=gnb&utm_campaign=map', '_blank');
+  closeModal();
 }}
 rP();rT();
 </script>
