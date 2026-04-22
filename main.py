@@ -465,12 +465,13 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
     <div class="panel" id="tp">
       <div class="ph"><div class="pt"><span class="dot g"></span>할인권·선불권</div><span class="pc" id="t-cnt"></span></div>
       <div class="fb">
-        <button class="fb-btn" onclick="tF('all',this)">전체</button>
-        <button class="fb-btn on" onclick="tF('open',this)">판매중</button>
-        <button class="fb-btn" onclick="tF('night',this)">심야</button>
-        <button class="fb-btn" onclick="tF('day',this)">당일</button>
-        <button class="fb-btn" onclick="tF('hour',this)">시간권</button>
-        <button class="fb-btn" onclick="tF('month',this)">월정기</button>
+        <button class="fb-btn on" onclick="tTglOpen(this)">판매중만</button>
+        <div style="width:1px;height:12px;background:var(--bd);margin:0 4px;"></div>
+        <button class="fb-btn type-btn on" onclick="tF('all',this)">전체</button>
+        <button class="fb-btn type-btn" onclick="tF('night',this)">심야</button>
+        <button class="fb-btn type-btn" onclick="tF('day',this)">당일</button>
+        <button class="fb-btn type-btn" onclick="tF('hour',this)">시간권</button>
+        <button class="fb-btn type-btn" onclick="tF('month',this)">월정기</button>
         <input class="fb-search" id="ts" placeholder="🔍 검색..." oninput="rT()">
       </div>
       <div class="sw">
@@ -514,7 +515,7 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
 const LOTS={lots_json};
 const TICKETS={tickets_json};
 let pFlt='all',pSK='p60',pSA=true;
-let tFlt='open',tSK='dist',tSA=true;
+let tFlt='all',tOpenOnly=true,tSK='dist',tSA=true;
 function fp(v){{if(v==null)return'-';if(v===0)return'무료';return v.toLocaleString()+'원';}}
 function pc(v){{if(v==null)return'';if(v===0)return'free';if(v<=3000)return'low';if(v<=6000)return'mid';return'high';}}
 function pF(f,el){{pFlt=f;document.querySelectorAll('#pp .fb-btn').forEach(b=>b.classList.remove('on'));el.classList.add('on');rP();}}
@@ -532,12 +533,13 @@ function rP(){{
   if(!d.length){{tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">없음</td></tr>';return;}}
   tb.innerHTML=d.map(l=>`<tr><td class="nc">${{l.name}}${{l.partner?' <span class="tag partner">파트너</span>':''}}</td><td><span class="dist">${{l.dist}}m</span></td><td class="p ${{pc(l.p30)}}">${{fp(l.p30)}}</td><td class="p ${{pc(l.p60)}}">${{fp(l.p60)}}</td><td class="p ${{pc(l.p120)}}">${{fp(l.p120)}}</td><td class="p ${{pc(l.p180)}}">${{fp(l.p180)}}</td></tr>`).join('');
 }}
-function tF(f,el){{tFlt=f;document.querySelectorAll('#tp .fb-btn').forEach(b=>b.classList.remove('on'));el.classList.add('on');rT();}}
+function tTglOpen(el){{tOpenOnly=!tOpenOnly;if(tOpenOnly)el.classList.add('on');else el.classList.remove('on');rT();}}
+function tF(f,el){{tFlt=f;document.querySelectorAll('#tp .type-btn').forEach(b=>b.classList.remove('on'));el.classList.add('on');rT();}}
 function sT(k){{if(tSK===k)tSA=!tSA;else{{tSK=k;tSA=true;}}rT();}}
 function rT(){{
   const s=document.getElementById('ts').value.toLowerCase();
   const md=+document.getElementById('td').value;
-  let d=TICKETS.filter(t=>{{if(t.dist>md)return false;if(tFlt==='open'&&(!t.open||t.soldout))return false;if(tFlt==='closed'&&t.open)return false;if(tFlt==='soldout'&&!t.soldout)return false;if(tFlt==='night'&&!t.name.includes('심야'))return false;if(tFlt==='day'&&!t.name.includes('당일'))return false;if(tFlt==='hour'&&!/(시간|h)/i.test(t.name))return false;if(tFlt==='month'&&!t.name.includes('월'))return false;if(s&&!t.lot.toLowerCase().includes(s)&&!t.name.toLowerCase().includes(s))return false;return true;}});
+  let d=TICKETS.filter(t=>{{if(t.dist>md)return false;if(tOpenOnly&&(!t.open||t.soldout))return false;if(tFlt==='night'&&!t.name.includes('심야'))return false;if(tFlt==='day'&&!t.name.includes('당일'))return false;if(tFlt==='hour'&&!/(시간|h)/i.test(t.name))return false;if(tFlt==='month'&&!t.name.includes('월'))return false;if(s&&!t.lot.toLowerCase().includes(s)&&!t.name.toLowerCase().includes(s))return false;return true;}});
   d.sort((a,b)=>{{let av=a[tSK],bv=b[tSK];if(typeof av==='string')return tSA?av.localeCompare(bv):bv.localeCompare(av);return tSA?av-bv:bv-av;}});
   const km={{lot:0,dist:1,name:2,price:3}};
   [0,1,2,3].forEach(i=>{{const th=document.getElementById('th'+i);th.className='';if(km[tSK]===i)th.className=tSA?'sa':'sd';}});
