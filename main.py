@@ -376,9 +376,9 @@ def build_html(lots, tickets, changes, snap_history, now_str, sheet_id, analysis
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 *{{margin:0;padding:0;box-sizing:border-box}}
-:root{{--bg:#EBF4FF;--s1:#FFFFFF;--s2:#F4F9FD;--bd:#CDE0F5;--blue:#2563EB;--green:#059669;--yellow:#D97706;--red:#DC2626;--t1:#0F172A;--t2:#334155;--t3:#64748B;--mono:'JetBrains Mono',monospace}}
+:root{{--bg:#0A0E1A;--s1:#111827;--s2:#1C2333;--bd:#2A3550;--blue:#3B82F6;--green:#10B981;--yellow:#F59E0B;--red:#EF4444;--t1:#F1F5F9;--t2:#94A3B8;--t3:#64748B;--mono:'JetBrains Mono',monospace}}
 body{{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--t1);min-height:100vh}}
-body::before{{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(37,99,235,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(37,99,235,.07) 1px,transparent 1px);background-size:40px 40px;pointer-events:none}}
+body::before{{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(59,130,246,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(59,130,246,.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none}}
 .wrap{{position:relative;z-index:1;max-width:1400px;margin:0 auto;padding:20px}}
 .hdr{{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--bd);flex-wrap:wrap;gap:10px}}
 .hdr-l{{display:flex;align-items:center;gap:12px}}
@@ -421,7 +421,7 @@ thead th{{padding:8px 10px;text-align:left;font-size:10px;font-weight:600;color:
 thead th:hover{{color:var(--t1)}}
 thead th.sa::after{{content:' ▲';color:var(--blue);font-size:9px}}
 thead th.sd::after{{content:' ▼';color:var(--blue);font-size:9px}}
-tbody tr{{border-bottom:1px solid var(--bd);transition:background .12s}}
+tbody tr{{border-bottom:1px solid rgba(42,53,80,.5);transition:background .12s}}
 tbody tr:hover{{background:var(--s2)}}
 tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
 .nc{{color:var(--t1);font-weight:500;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
@@ -435,7 +435,7 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
 .tag.open{{background:rgba(16,185,129,.15);color:var(--green);border:1px solid rgba(16,185,129,.3)}}
 .tag.closed{{background:rgba(100,116,139,.15);color:var(--t3);border:1px solid var(--bd)}}
 .tag.soldout{{background:rgba(245,158,11,.15);color:var(--yellow);border:1px solid rgba(245,158,11,.3)}}
-.change-row{{padding:9px 16px;border-bottom:1px solid var(--bd);display:flex;align-items:flex-start;gap:8px;font-size:12px}}
+.change-row{{padding:9px 16px;border-bottom:1px solid rgba(42,53,80,.4);display:flex;align-items:flex-start;gap:8px;font-size:12px}}
 .change-badge{{font-size:9px;padding:2px 6px;border-radius:3px;font-weight:700;border:1px solid;white-space:nowrap;flex-shrink:0;margin-top:1px}}
 .change-name{{color:var(--t1);font-weight:500}}.change-desc{{color:var(--t3);margin-top:2px;font-size:11px}}
 .empty{{padding:36px;text-align:center;color:var(--t3)}}.empty span{{font-size:28px;display:block;margin-bottom:8px;opacity:.4}}.empty p{{font-size:12px}}
@@ -447,7 +447,7 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
 .ana-range{{color:var(--t3);font-family:var(--mono)}}
 .ana-avg{{color:var(--blue);font-family:var(--mono);font-weight:600}}
 .ana-cnt{{color:var(--t3)}}
-.ana-row{{padding:10px 16px;border-bottom:1px solid var(--bd);display:flex;flex-direction:column;gap:4px}}
+.ana-row{{padding:10px 16px;border-bottom:1px solid rgba(42,53,80,.4);display:flex;flex-direction:column;gap:4px}}
 .ana-left{{display:flex;align-items:center;gap:8px}}
 .ana-badge{{font-size:9px;padding:2px 7px;border-radius:3px;font-weight:700;white-space:nowrap}}
 .ana-name{{font-size:12px;color:var(--t1);font-weight:500}}
@@ -541,7 +541,7 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
     <div class="panel full">
       <div class="ph">
         <div class="pt"><span class="dot" style="background:#8B5CF6"></span>할인권 적정성 분석</div>
-        <span class="pc" style="color:#7C3AED">500m 이내 파트너 기준</span>
+        <span class="pc" style="color:#A78BFA">500m 이내 파트너 기준</span>
       </div>
       <div class="ana-summary">
         <span style="font-size:11px;color:var(--t3);margin-right:4px">주변 평균가</span>
