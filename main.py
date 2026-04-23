@@ -4,7 +4,7 @@ CPBC 인근 주차장 모니터링 - GitHub Actions용
 매일 자동 실행 → Google Sheets에 이력 누적 저장
 """
 
-import json, math, os, urllib.request
+import json, math, os, time, urllib.request
 from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
@@ -59,6 +59,7 @@ def parse(raw):
             if d > RADIUS: continue
             cp = lot.get("calcPrice") or {}
             if cp.get("60") is None and not lot.get("tickets"): continue
+            if cp.get("60") == 0: continue
             item = {
                 "seq": lot["parkinglotSeq"], "name": lot["name"],
                 "dist": int(d), "partner": lot.get("isPartner", False),
@@ -296,14 +297,18 @@ def get_ai_insight(summary, cpbc_tickets):
 위 데이터를 바탕으로, 평화빌딩 주차장의 요금이 주변 대비 얼마나 경쟁력이 있는지 판단하고, 수익을 최적화하기 위한 구체적인 가격 조정 전략이나 유지 전략을 3~4문장으로 요약해서 제안해 주세요.
 어조는 전문적이고 핵심만 간결하게 전달해야 합니다. 마크다운을 사용하지 말고 순수 텍스트(혹은 간단한 이모지)로 작성해 주세요.
 """
-    try:
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-        )
-        return response.text.strip().replace('\n', '<br>')
-    except Exception as e:
-        return f"⚠️ AI 분석 중 오류가 발생했습니다: {str(e)}"
+    for attempt in range(3):
+        try:
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt,
+            )
+            return response.text.strip().replace('\n', '<br>')
+        except Exception as e:
+            if '503' in str(e) and attempt < 2:
+                time.sleep(5 * (2 ** attempt))  # 5s, 10s
+                continue
+            return f"⚠️ AI 분석 중 오류가 발생했습니다: {str(e)}"
 
 
 # ── HTML 대시보드 생성 ───────────────────────────────────────
