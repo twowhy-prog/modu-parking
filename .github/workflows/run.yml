@@ -2,7 +2,11 @@ name: CPBC 주차장 모니터링
 
 on:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 15 * * *'  # KST 00:00
+    - cron: '0 0 * * *'   # KST 09:00
+    - cron: '0 1 * * *'   # KST 10:00
+    - cron: '0 2 * * *'   # KST 11:00
+    - cron: '0 3 * * *'   # KST 12:00
   workflow_dispatch:
   push:
     branches: [main]
