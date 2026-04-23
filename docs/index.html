@@ -257,7 +257,7 @@ function closeModal(){
 }
 function goInfoPage(){
   if(currentSeq){
-    window.open(`https://app.modu.kr/t/${currentSeq}#sheet=1&event=0`, '_blank');
+    window.open(`https://app.modu.kr/map?type=P&id=${currentSeq}#sheet=1&event=0`, '_blank');
   }else{
     window.open('https://app.modu.kr/map?utm_source=homepage&utm_medium=gnb&utm_campaign=map', '_blank');
   }
