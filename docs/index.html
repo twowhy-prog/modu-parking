@@ -217,7 +217,7 @@ function sP(k){if(pSK===k)pSA=!pSA;else{pSK=k;pSA=true;}rP();}
 function rP(){
   const s=document.getElementById('ps').value.toLowerCase();
   const md=+document.getElementById('pd').value;
-  let d=LOTS.filter(l=>{if(l.dist>md)return false;if(pFlt==='partner'&&!l.partner)return false;if(pFlt==='cheap'&&(l.p60==null||l.p60>4000))return false;if(s&&!l.name.toLowerCase().includes(s))return false;return true;});
+  let d=LOTS.filter(l=>{if(l.dist>md)return false;if(l.p30==null&&l.p60==null&&l.p120==null&&l.p180==null)return false;if(pFlt==='partner'&&!l.partner)return false;if(pFlt==='cheap'&&(l.p60==null||l.p60>4000))return false;if(s&&!l.name.toLowerCase().includes(s))return false;return true;});
   d.sort((a,b)=>{let av=a[pSK],bv=b[pSK];if(av==null)av=99999;if(bv==null)bv=99999;if(typeof av==='string')return pSA?av.localeCompare(bv):bv.localeCompare(av);return pSA?av-bv:bv-av;});
   const km={name:0,dist:1,p30:2,p60:3,p120:4,p180:5};
   [0,1,2,3,4,5].forEach(i=>{const th=document.getElementById('ph'+i);th.className='';if(km[pSK]===i)th.className=pSA?'sa':'sd';});
