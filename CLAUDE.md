@@ -71,12 +71,25 @@ history.json     실행 타임스탬프 누적 이력 (최대 365개)
 - **할인권이력** — 매 실행마다 전체 할인권 append
 - **변경이력** — 변경사항 발생 시에만 append
 
-## 필수 GitHub Secrets
+## 새 계정/저장소 초기 세팅
+
+코드 자체는 자동이지만, 아래 3가지는 최초 1회 수동 설정이 필요하다.
+
+### 1. GitHub Secrets 등록
+저장소 **Settings → Secrets and variables → Actions** 에서 등록:
 
 | Secret | 용도 |
 |--------|------|
-| `GOOGLE_CREDENTIALS` | Google 서비스 계정 JSON (Sheets + Drive 권한 필요) |
-| `GEMINI_API_KEY` | AI 분석 (없으면 해당 기능만 스킵, 나머지 정상 동작) |
+| `GOOGLE_CREDENTIALS` | Google 서비스 계정 JSON 전체 내용 (Sheets + Drive 권한 필요) |
+| `GEMINI_API_KEY` | Gemini API 키 (없으면 AI 분석만 스킵, 나머지 정상 동작) |
+
+### 2. GitHub Pages 활성화
+저장소 **Settings → Pages** 에서:
+- Source: `Deploy from a branch`
+- Branch: `main` / `docs` 폴더
+
+### 3. Google Sheets 공유 설정
+`SHEET_ID`에 해당하는 Google Sheets 문서에 서비스 계정 이메일을 **편집자**로 공유 추가.
 
 ## HTML 대시보드
 
