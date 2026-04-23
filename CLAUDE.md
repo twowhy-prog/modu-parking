@@ -94,3 +94,15 @@ history.json     실행 타임스탬프 누적 이력 (최대 365개)
 ## HTML 대시보드
 
 `build_html()`이 반환하는 문자열 전체가 대시보드다. CSS와 JS가 모두 인라인으로 포함되어 있으며, Python f-string 이중 중괄호(`{{`, `}}`)로 리터럴 `{`, `}`를 이스케이프한다. 대시보드 UI를 수정할 때는 이 함수 내부의 HTML/CSS/JS를 직접 편집한다.
+
+**`docs/index.html` 동기화 주의:** `main.py`의 `build_html()`을 수정해도 `docs/index.html`은 GitHub Actions가 다음 실행될 때까지 갱신되지 않는다. 변경사항을 즉시 페이지에 반영해야 한다면 `docs/index.html`도 직접 같이 패치해야 한다.
+
+## 모두의주차 딥링크 URL
+
+대시보드에서 주차장 클릭 시 사용하는 URL 포맷:
+
+```
+https://app.modu.kr/map?type=P&id={parkinglotSeq}#sheet=1&event=0
+```
+
+지도에서 해당 주차장이 선택된 상태로 상세 시트가 열린다. `parkinglotSeq`는 API 응답의 `parkinglotSeq` 필드값이며, `parse()`에서 `seq`로 저장된다.
