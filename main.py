@@ -644,8 +644,8 @@ function closeModal(){{
   document.getElementById('modal-overlay').style.display='none';
 }}
 function goInfoPage(){{
-  if(currentLat && currentLng){{
-    window.open(`https://app.modu.kr/map?lat=${{currentLat}}&lng=${{currentLng}}`, '_blank');
+  if(currentSeq){{
+    window.open(`https://app.modu.kr/map?type=P&id=${{currentSeq}}#sheet=1&event=0`, '_blank');
   }}else{{
     window.open('https://app.modu.kr/map?utm_source=homepage&utm_medium=gnb&utm_campaign=map', '_blank');
   }}
