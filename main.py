@@ -4,7 +4,7 @@ CPBC 인근 주차장 모니터링 - GitHub Actions용
 매일 자동 실행 → Google Sheets에 이력 누적 저장
 """
 
-import json, math, os, time, urllib.request
+import json, math, os, re, time, urllib.request
 from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
@@ -276,8 +276,55 @@ def analyze_tickets(tickets):
     return analysis, summary, avgs
 
 
+def analyze_gap(tickets):
+    """
+    500m 이내 주차장 할인권 기준으로 틈새 수요 분석
+    - 경쟁사에는 있는데 평화빌딩에 없는 권종 파악
+    - 품절 중인 권종 집계 (수요 지표)
+    """
+    RADIUS = 500
+
+    def categorize(name):
+        if "심야" in name: return "심야권"
+        if "월" in name:   return "월정기권"
+        if "당일" in name: return "당일권"
+        if "3시간" in name: return "3시간권"
+        if re.search(r'[12]시간', name): return "단기시간권"
+        return "기타"
+
+    nearby = [t for t in tickets if t["dist"] <= RADIUS and t["price"] > 0]
+    cpbc   = [t for t in tickets if "평화빌딩" in t["lot"] and t["price"] > 0]
+
+    cpbc_cats = {categorize(t["name"]) for t in cpbc}
+
+    # 경쟁사 권종별 집계
+    competitor_stats = {}
+    for t in nearby:
+        if "평화빌딩" in t["lot"]: continue
+        cat = categorize(t["name"])
+        if cat not in competitor_stats:
+            competitor_stats[cat] = {"total": 0, "soldout": 0, "prices": []}
+        competitor_stats[cat]["total"] += 1
+        if t["soldout"]: competitor_stats[cat]["soldout"] += 1
+        competitor_stats[cat]["prices"].append(t["price"])
+
+    gap = []
+    for cat, stat in competitor_stats.items():
+        avg = int(sum(stat["prices"]) / len(stat["prices"])) if stat["prices"] else 0
+        gap.append({
+            "cat":          cat,
+            "has_cpbc":     cat in cpbc_cats,
+            "total":        stat["total"],
+            "soldout":      stat["soldout"],
+            "soldout_rate": round(stat["soldout"] / stat["total"] * 100) if stat["total"] else 0,
+            "avg_price":    avg,
+        })
+    gap.sort(key=lambda x: x["soldout_rate"], reverse=True)
+    return gap
+
+
 # ── AI 전략 분석 ─────────────────────────────────────────────
-def get_ai_insight(summary, cpbc_tickets):
+def get_ai_insight(summary, cpbc_tickets, gap=None):
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         return None
@@ -306,8 +353,15 @@ def get_ai_insight(summary, cpbc_tickets):
 [평화빌딩 주차장 현재 할인권]
 {json.dumps([t for t in cpbc_tickets if t['price'] > 0], ensure_ascii=False, indent=2)}
 
-위 운영 특성과 데이터를 종합하여, 평화빌딩 주차장의 현재 요금이 경쟁력 있는지 판단하고 수익 최적화를 위한 구체적인 전략을 3~4문장으로 제안해 주세요.
-어조는 전문적이고 핵심만 간결하게 전달해야 합니다. 마크다운을 사용하지 말고 순수 텍스트(혹은 간단한 이모지)로 작성해 주세요.
+[권종별 틈새 수요 분석 (500m 이내, 품절률 내림차순)]
+- has_cpbc: 평화빌딩에 해당 권종 존재 여부
+- soldout_rate: 현재 시점 경쟁사 품절 비율 (수요 강도 지표)
+{json.dumps(gap or [], ensure_ascii=False, indent=2)}
+
+위 운영 특성과 데이터를 종합하여 두 가지를 분석해 주세요.
+1) 현재 요금 경쟁력 및 수익 최적화 전략
+2) 틈새 수요 분석: 경쟁사에서 품절률이 높은 권종 중 평화빌딩에 없는 것이 있다면 도입 가치를 평가해 주세요. 품절률이 높을수록 수요가 강한 신호입니다.
+전체 4~5문장, 전문적이고 핵심만 간결하게. 마크다운 없이 순수 텍스트(간단한 이모지 허용)로 작성해 주세요.
 """
     for attempt in range(3):
         try:
@@ -703,7 +757,8 @@ if __name__ == "__main__":
 
     print("AI 전략 분석 중...")
     cpbc_tickets = [t for t in tickets if "평화빌딩" in t["lot"] and t["open"] and not t["soldout"]]
-    ai_insight = get_ai_insight(summary, cpbc_tickets)
+    gap = analyze_gap(tickets)
+    ai_insight = get_ai_insight(summary, cpbc_tickets, gap)
     if ai_insight:
         print("  🤖 AI 분석 완료")
     else:
