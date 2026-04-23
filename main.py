@@ -12,7 +12,7 @@ from google.oauth2.service_account import Credentials
 # ── 설정 ────────────────────────────────────────────────────
 CPBC_LAT = 37.5643171
 CPBC_LNG = 126.9881729
-RADIUS   = 800
+RADIUS   = 1000
 API_URL  = (
     "https://api.modu.cloud/poi/pins?"
     "geohash=wydmc2,wydmc8,wydm9x,wydm9w,wydm9q,wydm9n,wydm9p,"
@@ -378,7 +378,7 @@ def build_html(lots, tickets, changes, snap_history, now_str, sheet_id, analysis
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 *{{margin:0;padding:0;box-sizing:border-box}}
-:root{{--bg:#0A0E1A;--s1:#111827;--s2:#1C2333;--bd:#2A3550;--blue:#3B82F6;--green:#10B981;--yellow:#F59E0B;--red:#EF4444;--t1:#F1F5F9;--t2:#94A3B8;--t3:#64748B;--mono:'JetBrains Mono',monospace}}
+:root{{--bg:#101420;--s1:#171E2D;--s2:#222939;--bd:#2A3550;--blue:#3B82F6;--green:#10B981;--yellow:#F59E0B;--red:#EF4444;--t1:#F1F5F9;--t2:#94A3B8;--t3:#64748B;--mono:'JetBrains Mono',monospace}}
 body{{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--t1);min-height:100vh}}
 body::before{{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(59,130,246,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(59,130,246,.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none}}
 .wrap{{position:relative;z-index:1;max-width:1400px;margin:0 auto;padding:20px}}
@@ -472,7 +472,7 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
   <div class="hdr">
     <div class="hdr-l">
       <div class="logo">🅿</div>
-      <div><h1>CPBC 주변 주차장 현황</h1><p>삼일대로 330 기준 반경 800m · 모두의주차 데이터</p></div>
+      <div><h1>CPBC 주변 주차장 현황</h1><p>삼일대로 330 기준 반경 1km · 모두의주차 데이터</p></div>
     </div>
     <div class="hdr-r">
       <span class="badge">{now_str}</span>
@@ -481,7 +481,7 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
     </div>
   </div>
   <div class="kpi">
-    <div class="kcard b"><div class="kl">주차장 수</div><div class="kv b">{len(lots)}</div><div class="ks">반경 800m 이내</div></div>
+    <div class="kcard b"><div class="kl">주차장 수</div><div class="kv b">{len(lots)}</div><div class="ks">반경 1km 이내</div></div>
     <div class="kcard g"><div class="kl">파트너</div><div class="kv g">{partners}</div><div class="ks">앱 결제 가능</div></div>
     <div class="kcard y"><div class="kl">할인권 보유</div><div class="kv y">{with_tick}</div><div class="ks">개 주차장</div></div>
     <div class="kcard r"><div class="kl">최저 1시간</div><div class="kv r">{f"{min_p['p60']:,}원" if min_p else "-"}</div><div class="ks">{min_p['name'][:12] if min_p else "-"}</div></div>
@@ -498,8 +498,8 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
       </div>
       <div class="sw">
         <span class="sl">거리</span>
-        <input type="range" id="pd" min="100" max="800" step="50" value="800" oninput="document.getElementById('pdv').textContent=this.value+'m';rP()">
-        <span class="sv" id="pdv">800m</span>
+        <input type="range" id="pd" min="100" max="1000" step="50" value="1000" oninput="document.getElementById('pdv').textContent=this.value+'m';rP()">
+        <span class="sv" id="pdv">1000m</span>
       </div>
       <div class="tw"><table>
         <thead><tr>
@@ -528,8 +528,8 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
       </div>
       <div class="sw">
         <span class="sl">거리</span>
-        <input type="range" id="td" min="100" max="800" step="50" value="800" oninput="document.getElementById('tdv').textContent=this.value+'m';rT()">
-        <span class="sv" id="tdv">800m</span>
+        <input type="range" id="td" min="100" max="1000" step="50" value="1000" oninput="document.getElementById('tdv').textContent=this.value+'m';rT()">
+        <span class="sv" id="tdv">1000m</span>
       </div>
       <div class="tw"><table>
         <thead><tr>
