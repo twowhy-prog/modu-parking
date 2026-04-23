@@ -60,15 +60,19 @@ def parse(raw):
             cp = lot.get("calcPrice") or {}
             if cp.get("60") is None and not lot.get("tickets"): continue
             if cp.get("60") == 0: continue
+            lat = lot.get("latitude", 0)
+            lng = lot.get("longitude", 0)
             item = {
                 "seq": lot["parkinglotSeq"], "name": lot["name"],
                 "dist": int(d), "partner": lot.get("isPartner", False),
                 "p30": cp.get("30"), "p60": cp.get("60"),
                 "p120": cp.get("120"), "p180": cp.get("180"),
+                "lat": lat, "lng": lng,
             }
             lots.append(item)
             for t in lot.get("tickets", []):
                 tickets.append({
+                    "seq": lot["parkinglotSeq"],
                     "lot": lot["name"], "dist": int(d),
                     "partner": lot.get("isPartner", False),
                     "name": t.get("couponName", ""),
@@ -76,6 +80,7 @@ def parse(raw):
                     "time": t.get("usingTimeLabel", ""),
                     "open": t.get("isOpen", False),
                     "soldout": t.get("isSoldOut", False),
+                    "lat": lat, "lng": lng,
                 })
     lots.sort(key=lambda x: (x["p60"] if x["p60"] is not None else 99999, x["dist"]))
     tickets.sort(key=lambda x: (x["dist"], x["price"]))
@@ -608,7 +613,7 @@ function rP(){{
   document.getElementById('p-st').textContent=`전체 ${{LOTS.length}}개 중 ${{d.length}}개`;
   const tb=document.getElementById('pb');
   if(!d.length){{tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">없음</td></tr>';return;}}
-  tb.innerHTML=d.map(l=>`<tr onclick="openModal('${{l.name.replace(/'/g,"\\'")}}', ${{l.dist}}, ${{l.partner}}, ${{l.p60!==null?l.p60:'null'}}, ${{l.seq}})" style="cursor:pointer"><td class="nc">${{l.name}}${{l.partner?' <span class="tag partner">파트너</span>':''}}</td><td><span class="dist">${{l.dist}}m</span></td><td class="p ${{pc(l.p30)}}">${{fp(l.p30)}}</td><td class="p ${{pc(l.p60)}}">${{fp(l.p60)}}</td><td class="p ${{pc(l.p120)}}">${{fp(l.p120)}}</td><td class="p ${{pc(l.p180)}}">${{fp(l.p180)}}</td></tr>`).join('');
+  tb.innerHTML=d.map(l=>`<tr onclick="openModal('${{l.name.replace(/'/g,"\\'")}}', ${{l.dist}}, ${{l.partner}}, ${{l.p60!==null?l.p60:'null'}}, ${{l.seq}}, ${{l.lat}}, ${{l.lng}})" style="cursor:pointer"><td class="nc">${{l.name}}${{l.partner?' <span class="tag partner">파트너</span>':''}}</td><td><span class="dist">${{l.dist}}m</span></td><td class="p ${{pc(l.p30)}}">${{fp(l.p30)}}</td><td class="p ${{pc(l.p60)}}">${{fp(l.p60)}}</td><td class="p ${{pc(l.p120)}}">${{fp(l.p120)}}</td><td class="p ${{pc(l.p180)}}">${{fp(l.p180)}}</td></tr>`).join('');
 }}
 function tTglOpen(el){{tOpenOnly=!tOpenOnly;if(tOpenOnly)el.classList.add('on');else el.classList.remove('on');rT();}}
 function tF(f,el){{tFlt=f;document.querySelectorAll('#tp .type-btn').forEach(b=>b.classList.remove('on'));el.classList.add('on');rT();}}
@@ -624,11 +629,11 @@ function rT(){{
   document.getElementById('t-st').textContent=`전체 ${{TICKETS.length}}개 중 ${{d.length}}개`;
   const tb=document.getElementById('tb');
   if(!d.length){{tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">없음</td></tr>';return;}}
-  tb.innerHTML=d.map(t=>{{const st=t.soldout?'<span class="tag soldout">품절</span>':t.open?'<span class="tag open">판매중</span>':'<span class="tag closed">비판매</span>';return`<tr class="${{(!t.open||t.soldout)?'rdim':''}}" onclick="openModal('${{t.lot.replace(/'/g,"\\'")}}', ${{t.dist}}, ${{t.partner}}, null, ${{t.seq}})" style="cursor:pointer"><td class="nc">${{t.lot}}${{t.partner?' <span class="tag partner">파트너</span>':''}}</td><td><span class="dist">${{t.dist}}m</span></td><td>${{t.name}}</td><td class="p mid">${{t.price.toLocaleString()}}원</td><td class="tc">${{t.time}}</td><td>${{st}}</td></tr>`;}}).join('');
+  tb.innerHTML=d.map(t=>{{const st=t.soldout?'<span class="tag soldout">품절</span>':t.open?'<span class="tag open">판매중</span>':'<span class="tag closed">비판매</span>';return`<tr class="${{(!t.open||t.soldout)?'rdim':''}}" onclick="openModal('${{t.lot.replace(/'/g,"\\'")}}', ${{t.dist}}, ${{t.partner}}, null, ${{t.seq}}, ${{t.lat}}, ${{t.lng}})" style="cursor:pointer"><td class="nc">${{t.lot}}${{t.partner?' <span class="tag partner">파트너</span>':''}}</td><td><span class="dist">${{t.dist}}m</span></td><td>${{t.name}}</td><td class="p mid">${{t.price.toLocaleString()}}원</td><td class="tc">${{t.time}}</td><td>${{st}}</td></tr>`;}}).join('');
 }}
-let currentSeq = null;
-function openModal(name, dist, partner, p60, seq){{
-  currentSeq = seq;
+let currentSeq = null, currentLat = null, currentLng = null;
+function openModal(name, dist, partner, p60, seq, lat, lng){{
+  currentSeq = seq; currentLat = lat; currentLng = lng;
   document.getElementById('m-title').innerHTML=name+(partner?' <span class="tag partner">파트너</span>':'');
   document.getElementById('m-dist').textContent='거리: '+dist+'m';
   document.getElementById('m-price').textContent=p60!==null?'1시간 기본요금: '+fp(p60):'할인권 관련 주차장입니다.';
@@ -639,8 +644,8 @@ function closeModal(){{
   document.getElementById('modal-overlay').style.display='none';
 }}
 function goInfoPage(){{
-  if(currentSeq){{
-    window.open(`https://app.modu.kr/t/${{currentSeq}}#sheet=1&event=0`, '_blank');
+  if(currentLat && currentLng){{
+    window.open(`https://app.modu.kr/map?lat=${{currentLat}}&lng=${{currentLng}}`, '_blank');
   }}else{{
     window.open('https://app.modu.kr/map?utm_source=homepage&utm_medium=gnb&utm_campaign=map', '_blank');
   }}
