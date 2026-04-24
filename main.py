@@ -619,6 +619,16 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
 .m-btn{{padding:8px 16px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:none}}
 .m-btn.close{{background:var(--s2);color:var(--t2);border:1px solid var(--bd)}}
 .m-btn.ok{{background:var(--blue);color:#FFF}}
+.srch-wrap{{margin-bottom:14px}}
+.srch-bar{{display:flex;align-items:center;gap:8px;background:var(--s1);border:1px solid var(--bd);border-radius:10px;padding:10px 14px;flex-wrap:wrap}}
+.srch-in{{flex:1;min-width:180px;font-family:'Noto Sans KR',sans-serif;font-size:13px;background:transparent;border:none;color:var(--t1);outline:none}}
+.srch-in::placeholder{{color:var(--t3)}}
+.srch-sel{{font-family:'Noto Sans KR',sans-serif;font-size:12px;background:var(--s2);border:1px solid var(--bd);color:var(--t2);padding:4px 8px;border-radius:6px;cursor:pointer;outline:none}}
+.srch-btn{{font-family:'Noto Sans KR',sans-serif;font-size:12px;font-weight:700;padding:6px 16px;border-radius:6px;border:none;background:var(--blue);color:#fff;cursor:pointer}}
+.srch-btn:hover{{opacity:.85}}
+.srch-rst{{font-family:'Noto Sans KR',sans-serif;font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid var(--bd);background:transparent;color:var(--t3);cursor:pointer}}
+.srch-rst:hover{{color:var(--t1)}}
+.srch-st{{font-size:12px;color:var(--t2);margin-top:6px;line-height:1.5;min-height:16px}}
 </style>
 </head>
 <body>
@@ -633,6 +643,23 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
       <a href="{sheets_url}" target="_blank" class="badge sheets">📊 Sheets 이력</a>
       <span class="badge ok">최신</span>
     </div>
+  </div>
+  <div class="srch-wrap">
+    <div class="srch-bar">
+      <span style="font-size:15px;flex-shrink:0;color:var(--t3)">🔍</span>
+      <input class="srch-in" id="srch-addr" type="text"
+        placeholder="주소 입력 후 Enter (예: 서울시 강남구 테헤란로 152)"
+        onkeydown="if(event.key==='Enter')doSearch()">
+      <select class="srch-sel" id="srch-rm">
+        <option value="500">500m</option>
+        <option value="1000" selected>1km</option>
+        <option value="2000">2km</option>
+        <option value="3000">3km</option>
+      </select>
+      <button class="srch-btn" onclick="doSearch()">검색</button>
+      <button class="srch-rst" onclick="resetSearch()">초기화</button>
+    </div>
+    <div id="srch-st" class="srch-st"></div>
   </div>
   <div class="kpi">
     <div class="kcard b"><div class="kl">주차장 수</div><div class="kv b">{len(lots)}</div><div class="ks">반경 {radius}m 이내</div></div>
@@ -733,6 +760,9 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
 <script>
 const LOTS={lots_json};
 const TICKETS={tickets_json};
+var LIVE_LOTS=null,LIVE_TICKETS=null;
+function gL(){{return LIVE_LOTS||LOTS;}}
+function gT(){{return LIVE_TICKETS||TICKETS;}}
 let pFlt='all',pSK='p60',pSA=true;
 let tFlt='all',tOpenOnly=true,tSK='dist',tSA=true;
 function fp(v){{if(v==null)return'-';if(v===0)return'무료';return v.toLocaleString()+'원';}}
@@ -742,12 +772,12 @@ function sP(k){{if(pSK===k)pSA=!pSA;else{{pSK=k;pSA=true;}}rP();}}
 function rP(){{
   const s=document.getElementById('ps').value.toLowerCase();
   const md=+document.getElementById('pd').value;
-  let d=LOTS.filter(l=>{{if(l.dist>md)return false;if(l.p30==null&&l.p60==null&&l.p120==null&&l.p180==null)return false;if(pFlt==='partner'&&!l.partner)return false;if(pFlt==='cheap'&&(l.p60==null||l.p60>4000))return false;if(s&&!l.name.toLowerCase().includes(s))return false;return true;}});
+  let d=gL().filter(l=>{{if(l.dist>md)return false;if(l.p30==null&&l.p60==null&&l.p120==null&&l.p180==null)return false;if(pFlt==='partner'&&!l.partner)return false;if(pFlt==='cheap'&&(l.p60==null||l.p60>4000))return false;if(s&&!l.name.toLowerCase().includes(s))return false;return true;}});
   d.sort((a,b)=>{{let av=a[pSK],bv=b[pSK];if(av==null)av=99999;if(bv==null)bv=99999;if(typeof av==='string')return pSA?av.localeCompare(bv):bv.localeCompare(av);return pSA?av-bv:bv-av;}});
   const km={{name:0,dist:1,p30:2,p60:3,p120:4,p180:5}};
   [0,1,2,3,4,5].forEach(i=>{{const th=document.getElementById('ph'+i);th.className='';if(km[pSK]===i)th.className=pSA?'sa':'sd';}});
   document.getElementById('p-cnt').textContent=d.length+'개소';
-  document.getElementById('p-st').textContent=`전체 ${{LOTS.length}}개 중 ${{d.length}}개`;
+  document.getElementById('p-st').textContent=`전체 ${{gL().length}}개 중 ${{d.length}}개`;
   const tb=document.getElementById('pb');
   if(!d.length){{tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">없음</td></tr>';return;}}
   tb.innerHTML=d.map(l=>`<tr onclick="openModal('${{l.name.replace(/'/g,"\\'")}}', ${{l.dist}}, ${{l.partner}}, ${{l.p60!==null?l.p60:'null'}}, ${{l.seq}}, ${{l.lat}}, ${{l.lng}})" style="cursor:pointer"><td class="nc">${{l.name}}${{l.partner?' <span class="tag partner">파트너</span>':''}}</td><td><span class="dist">${{l.dist}}m</span></td><td class="p ${{pc(l.p30)}}">${{fp(l.p30)}}</td><td class="p ${{pc(l.p60)}}">${{fp(l.p60)}}</td><td class="p ${{pc(l.p120)}}">${{fp(l.p120)}}</td><td class="p ${{pc(l.p180)}}">${{fp(l.p180)}}</td></tr>`).join('');
@@ -758,12 +788,12 @@ function sT(k){{if(tSK===k)tSA=!tSA;else{{tSK=k;tSA=true;}}rT();}}
 function rT(){{
   const s=document.getElementById('ts').value.toLowerCase();
   const md=+document.getElementById('td').value;
-  let d=TICKETS.filter(t=>{{if(t.dist>md)return false;if(tOpenOnly&&(!t.open||t.soldout))return false;if(tFlt==='night'&&!t.name.includes('심야'))return false;if(tFlt==='day'&&!t.name.includes('당일'))return false;if(tFlt==='hour'&&!/(시간|h)/i.test(t.name))return false;if(tFlt==='month'&&!t.name.includes('월'))return false;if(s&&!t.lot.toLowerCase().includes(s)&&!t.name.toLowerCase().includes(s))return false;return true;}});
+  let d=gT().filter(t=>{{if(t.dist>md)return false;if(tOpenOnly&&(!t.open||t.soldout))return false;if(tFlt==='night'&&!t.name.includes('심야'))return false;if(tFlt==='day'&&!t.name.includes('당일'))return false;if(tFlt==='hour'&&!/(시간|h)/i.test(t.name))return false;if(tFlt==='month'&&!t.name.includes('월'))return false;if(s&&!t.lot.toLowerCase().includes(s)&&!t.name.toLowerCase().includes(s))return false;return true;}});
   d.sort((a,b)=>{{let av=a[tSK],bv=b[tSK];if(typeof av==='string')return tSA?av.localeCompare(bv):bv.localeCompare(av);return tSA?av-bv:bv-av;}});
   const km={{lot:0,dist:1,name:2,price:3}};
   [0,1,2,3].forEach(i=>{{const th=document.getElementById('th'+i);th.className='';if(km[tSK]===i)th.className=tSA?'sa':'sd';}});
   document.getElementById('t-cnt').textContent=d.length+'개';
-  document.getElementById('t-st').textContent=`전체 ${{TICKETS.length}}개 중 ${{d.length}}개`;
+  document.getElementById('t-st').textContent=`전체 ${{gT().length}}개 중 ${{d.length}}개`;
   const tb=document.getElementById('tb');
   if(!d.length){{tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">없음</td></tr>';return;}}
   tb.innerHTML=d.map(t=>{{const st=t.soldout?'<span class="tag soldout">품절</span>':t.open?'<span class="tag open">판매중</span>':'<span class="tag closed">비판매</span>';return`<tr class="${{(!t.open||t.soldout)?'rdim':''}}" onclick="openModal('${{t.lot.replace(/'/g,"\\'")}}', ${{t.dist}}, ${{t.partner}}, null, ${{t.seq}}, ${{t.lat}}, ${{t.lng}})" style="cursor:pointer"><td class="nc">${{t.lot}}${{t.partner?' <span class="tag partner">파트너</span>':''}}</td><td><span class="dist">${{t.dist}}m</span></td><td>${{t.name}}</td><td class="p mid">${{t.price.toLocaleString()}}원</td><td class="tc">${{t.time}}</td><td>${{st}}</td></tr>`;}}).join('');
@@ -787,6 +817,132 @@ function goInfoPage(){{
     window.open('https://app.modu.kr/map?utm_source=homepage&utm_medium=gnb&utm_campaign=map', '_blank');
   }}
   closeModal();
+}}
+// ── 주소 검색 ────────────────────────────────────────────────
+const _B32='0123456789bcdefghjkmnpqrstuvwxyz';
+function _ghBnd(gh){{
+  let lo=-90,hi=90,llo=-180,lhi=180,isL=true;
+  for(const c of gh){{
+    let b=_B32.indexOf(c);
+    for(let i=4;i>=0;i--){{
+      const bit=(b>>i)&1;
+      if(isL){{const m=(llo+lhi)/2;if(bit)llo=m;else lhi=m;}}
+      else{{const m=(lo+hi)/2;if(bit)lo=m;else hi=m;}}
+      isL=!isL;
+    }}
+  }}
+  return{{lo,hi,llo,lhi}};
+}}
+function _ghEnc(lat,lng,p=6){{
+  let lo=-90,hi=90,llo=-180,lhi=180,isL=true,res='',b=0,n=0;
+  while(res.length<p){{
+    if(isL){{const m=(llo+lhi)/2;if(lng>=m){{b=(b<<1)|1;llo=m;}}else{{b<<=1;lhi=m;}}}}
+    else{{const m=(lo+hi)/2;if(lat>=m){{b=(b<<1)|1;lo=m;}}else{{b<<=1;hi=m;}}}}
+    isL=!isL;n++;
+    if(n===5){{res+=_B32[b];b=0;n=0;}}
+  }}
+  return res;
+}}
+function _ghExp(lat,lng,rm,p=6){{
+  const c=_ghEnc(lat,lng,p);
+  const {{lo,hi,llo,lhi}}=_ghBnd(c);
+  const ch=(hi-lo)*111320,cw=(lhi-llo)*111320*Math.cos(lat*Math.PI/180);
+  const rings=Math.max(1,Math.ceil(rm/Math.min(ch,cw)));
+  const seen=new Set([c]);let front=new Set([c]);
+  for(let r=0;r<rings;r++){{
+    const nxt=new Set();
+    for(const gh of front){{
+      const {{lo:a,hi:b2,llo:c2,lhi:d2}}=_ghBnd(gh);
+      const lc=(a+b2)/2,gc=(c2+d2)/2,ld=b2-a,gd=d2-c2;
+      for(const dl of[-1,0,1])for(const dg of[-1,0,1]){{
+        if(!dl&&!dg)continue;
+        const nb=_ghEnc(lc+dl*ld,gc+dg*gd,gh.length);
+        if(!seen.has(nb)){{seen.add(nb);nxt.add(nb);}}
+      }}
+    }}
+    front=nxt;
+  }}
+  return[...seen];
+}}
+function _dist(a,b,c,d){{
+  const R=6371000,r=Math.PI/180;
+  const x=Math.sin((c-a)*r/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin((d-b)*r/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}}
+function _parseRaw(raw,clat,clng,rm){{
+  const lots=[],tix=[];
+  for(const g of(raw.data||[]))for(const l of(g.parkinglots||[])){{
+    const d=_dist(clat,clng,l.latitude||0,l.longitude||0);
+    if(d>rm)continue;
+    const cp=l.calcPrice||{{}};
+    if(cp['60']==null&&!l.tickets?.length)continue;
+    if(cp['60']===0)continue;
+    lots.push({{seq:l.parkinglotSeq,name:l.name,dist:Math.round(d),partner:l.isPartner||false,
+      p30:cp['30']??null,p60:cp['60']??null,p120:cp['120']??null,p180:cp['180']??null,
+      lat:l.latitude||0,lng:l.longitude||0}});
+    for(const t of(l.tickets||[]))tix.push({{
+      seq:l.parkinglotSeq,lot:l.name,dist:Math.round(d),partner:l.isPartner||false,
+      name:t.couponName||'',price:t.price||0,time:t.usingTimeLabel||'',
+      open:t.isOpen||false,soldout:t.isSoldOut||false,lat:l.latitude||0,lng:l.longitude||0
+    }});
+  }}
+  lots.sort((a,b)=>(a.p60??99999)-(b.p60??99999)||a.dist-b.dist);
+  tix.sort((a,b)=>a.dist-b.dist||a.price-b.price);
+  return{{lots,tix}};
+}}
+function _setSliderMax(rm){{
+  ['pd','td'].forEach(id=>{{
+    const el=document.getElementById(id);
+    el.max=rm;el.value=rm;
+  }});
+  document.getElementById('pdv').textContent=rm+'m';
+  document.getElementById('tdv').textContent=rm+'m';
+}}
+async function doSearch(){{
+  const addr=document.getElementById('srch-addr').value.trim();
+  const rm=+document.getElementById('srch-rm').value;
+  if(!addr)return;
+  const st=document.getElementById('srch-st');
+  st.textContent='📍 주소 검색 중...';
+  let lat,lng,dispName;
+  try{{
+    const r=await fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(addr)+'&format=json&limit=1&accept-language=ko',
+      {{headers:{{'User-Agent':'modu-parking-dashboard'}}}});
+    const data=await r.json();
+    if(!data.length)throw new Error('주소를 찾을 수 없습니다. 더 구체적으로 입력해 주세요.');
+    lat=parseFloat(data[0].lat);lng=parseFloat(data[0].lon);
+    dispName=data[0].display_name.split(',').slice(0,3).join(',').trim();
+  }}catch(e){{st.textContent='❌ '+e.message;return;}}
+  st.textContent='🅿 주차장 데이터 불러오는 중...';
+  try{{
+    const hashes=_ghExp(lat,lng,rm);
+    const url='https://api.modu.cloud/poi/pins?geohash='+hashes.join(',')+'&shareMode=true&partnerMode=true';
+    const r=await fetch(url,{{headers:{{'accept':'application/json'}}}});
+    if(!r.ok)throw new Error('API 응답 오류 ('+r.status+')');
+    const raw=await r.json();
+    const {{lots,tix}}=_parseRaw(raw,lat,lng,rm);
+    LIVE_LOTS=lots;LIVE_TICKETS=tix;
+    _setSliderMax(rm);
+    document.querySelector('.hdr p').textContent=dispName+' 기준 반경 '+rm+'m · 모두의주차 데이터';
+    st.innerHTML='✅ <strong>'+lots.length+'개 주차장</strong>, '+tix.length+'개 할인권 ('+dispName+')';
+    rP();rT();
+  }}catch(e){{
+    LIVE_LOTS=null;LIVE_TICKETS=null;
+    if(e instanceof TypeError){{
+      st.innerHTML='⚠️ 브라우저 보안 정책(CORS)으로 API 직접 호출이 제한되었습니다.<br>'
+        +'CLI: <code>python main.py --address "'+addr+'"</code> 로 실행 후 HTML을 새로고침하세요.';
+    }}else{{
+      st.textContent='❌ '+e.message;
+    }}
+  }}
+}}
+function resetSearch(){{
+  LIVE_LOTS=null;LIVE_TICKETS=null;
+  document.getElementById('srch-addr').value='';
+  document.getElementById('srch-st').textContent='';
+  document.querySelector('.hdr p').textContent='{location_name} 기준 반경 {radius}m · 모두의주차 데이터';
+  _setSliderMax({radius});
+  rP();rT();
 }}
 rP();rT();
 </script>
