@@ -4,7 +4,7 @@ CPBC 인근 주차장 모니터링 - GitHub Actions용
 매일 자동 실행 → Google Sheets에 이력 누적 저장
 """
 
-import json, math, os, re, time, urllib.request
+import argparse, json, math, os, re, time, urllib.parse, urllib.request
 from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
@@ -25,6 +25,91 @@ SNAP_FILE = os.path.join(BASE_DIR, "snapshot.json")
 SHEET_ID  = "1E0llbaOGSsHWO1DPVRy14uUTSvPOhqJyk6OcyVvzG7w"
 SCOPES    = ["https://www.googleapis.com/auth/spreadsheets",
              "https://www.googleapis.com/auth/drive"]
+MY_LOT_DEFAULT = "평화빌딩"
+LOC_DEFAULT    = "삼일대로 330 (CPBC)"
+
+# ── 지오해시 ─────────────────────────────────────────────────
+_GH_BASE32 = "0123456789bcdefghjkmnpqrstuvwxyz"
+
+def _gh_bounds(ghash):
+    lat_lo, lat_hi = -90.0, 90.0
+    lng_lo, lng_hi = -180.0, 180.0
+    is_lng = True
+    for ch in ghash:
+        bits = _GH_BASE32.index(ch)
+        for i in range(4, -1, -1):
+            bit = (bits >> i) & 1
+            if is_lng:
+                mid = (lng_lo + lng_hi) / 2
+                if bit: lng_lo = mid
+                else:   lng_hi = mid
+            else:
+                mid = (lat_lo + lat_hi) / 2
+                if bit: lat_lo = mid
+                else:   lat_hi = mid
+            is_lng = not is_lng
+    return lat_lo, lat_hi, lng_lo, lng_hi
+
+def _gh_encode(lat, lng, precision=6):
+    lat_lo, lat_hi = -90.0, 90.0
+    lng_lo, lng_hi = -180.0, 180.0
+    is_lng = True
+    result, bits, count = [], 0, 0
+    while len(result) < precision:
+        if is_lng:
+            mid = (lng_lo + lng_hi) / 2
+            if lng >= mid: bits = (bits << 1) | 1; lng_lo = mid
+            else:          bits = (bits << 1);     lng_hi = mid
+        else:
+            mid = (lat_lo + lat_hi) / 2
+            if lat >= mid: bits = (bits << 1) | 1; lat_lo = mid
+            else:          bits = (bits << 1);     lat_hi = mid
+        is_lng = not is_lng
+        count += 1
+        if count == 5:
+            result.append(_GH_BASE32[bits])
+            bits, count = 0, 0
+    return "".join(result)
+
+def geohash_expand(lat, lng, radius_m, precision=6):
+    """반경을 커버하는 지오해시 셀 목록 반환"""
+    center = _gh_encode(lat, lng, precision)
+    lat_lo, lat_hi, lng_lo, lng_hi = _gh_bounds(center)
+    cell_h = (lat_hi - lat_lo) * 111320
+    cell_w = (lng_hi - lng_lo) * 111320 * math.cos(math.radians(lat))
+    rings = max(1, math.ceil(radius_m / min(cell_h, cell_w)))
+
+    seen, frontier = {center}, {center}
+    for _ in range(rings):
+        nxt = set()
+        for gh in frontier:
+            lo, hi, llo, lhi = _gh_bounds(gh)
+            lc, gc = (lo + hi) / 2, (llo + lhi) / 2
+            ld, gd = hi - lo, lhi - llo
+            for dl in [-1, 0, 1]:
+                for dg in [-1, 0, 1]:
+                    if dl == 0 and dg == 0: continue
+                    n = _gh_encode(lc + dl * ld, gc + dg * gd, precision)
+                    if n not in seen:
+                        seen.add(n)
+                        nxt.add(n)
+        frontier = nxt
+    return list(seen)
+
+# ── 주소 → 좌표 변환 (Kakao Maps API) ───────────────────────
+def geocode_address(address):
+    api_key = os.environ.get("KAKAO_API_KEY")
+    if not api_key:
+        raise ValueError("주소 검색에는 KAKAO_API_KEY 환경변수가 필요합니다.")
+    for endpoint in ["search/address", "search/keyword"]:
+        url = (f"https://dapi.kakao.com/v2/local/{endpoint}.json"
+               f"?query={urllib.parse.quote(address)}&size=1")
+        req = urllib.request.Request(url, headers={"Authorization": f"KakaoAK {api_key}"})
+        with urllib.request.urlopen(req, timeout=10) as res:
+            docs = json.loads(res.read().decode())["documents"]
+        if docs:
+            return float(docs[0]["y"]), float(docs[0]["x"])
+    raise ValueError(f"주소를 찾을 수 없습니다: {address}")
 
 # ── 유틸 ────────────────────────────────────────────────────
 def calc_dist(lat1, lng1, lat2, lng2):
@@ -39,8 +124,13 @@ def fp(v):
     return f"{v:,}원"
 
 # ── API 호출 ─────────────────────────────────────────────────
-def fetch_api():
-    req = urllib.request.Request(API_URL, headers={
+def fetch_api(geohashes=None):
+    if geohashes is None:
+        url = API_URL
+    else:
+        url = (f"https://api.modu.cloud/poi/pins?"
+               f"geohash={','.join(geohashes)}&shareMode=true&partnerMode=true")
+    req = urllib.request.Request(url, headers={
         "accept":"application/json", "origin":"https://app.modu.kr",
         "referer":"https://app.modu.kr/", "user-agent":"Mozilla/5.0"
     })
@@ -48,15 +138,15 @@ def fetch_api():
         return json.loads(res.read().decode("utf-8"))
 
 # ── 파싱 ────────────────────────────────────────────────────
-def parse(raw):
+def parse(raw, center_lat=CPBC_LAT, center_lng=CPBC_LNG, radius=RADIUS):
     lots, tickets = [], []
     for group in raw.get("data", []):
         for lot in group.get("parkinglots", []):
             if "명동아르누보센텀" in lot.get("name", ""):
                 continue
-            d = calc_dist(CPBC_LAT, CPBC_LNG,
+            d = calc_dist(center_lat, center_lng,
                           lot.get("latitude", 0), lot.get("longitude", 0))
-            if d > RADIUS: continue
+            if d > radius: continue
             cp = lot.get("calcPrice") or {}
             if cp.get("60") is None and not lot.get("tickets"): continue
             if cp.get("60") == 0: continue
@@ -203,7 +293,7 @@ def write_sheets(gc, lots, tickets, changes, now_str):
 
 
 # ── 할인권 적정성 분석 ───────────────────────────────────────
-def analyze_tickets(tickets):
+def analyze_tickets(tickets, my_lot=MY_LOT_DEFAULT):
     """
     500m 이내 파트너 주차장 할인권 기준으로 권종별 적정성 분석
     - 당일권 / 3시간권 / 기타 로 분류
@@ -238,8 +328,8 @@ def analyze_tickets(tickets):
     for cat, prices in by_cat.items():
         avgs[cat] = int(sum(prices) / len(prices)) if prices else 0
 
-    # CPBC(평화빌딩) 할인권 분석
-    cpbc_tickets = [t for t in tickets if "평화빌딩" in t["lot"] and t["open"] and not t["soldout"]]
+    # 분석 대상 주차장 할인권
+    cpbc_tickets = [t for t in tickets if my_lot in t["lot"] and t["open"] and not t["soldout"]]
 
     analysis = []
     for t in cpbc_tickets:
@@ -276,10 +366,10 @@ def analyze_tickets(tickets):
     return analysis, summary, avgs
 
 
-def analyze_gap(tickets):
+def analyze_gap(tickets, my_lot=MY_LOT_DEFAULT):
     """
     500m 이내 주차장 할인권 기준으로 틈새 수요 분석
-    - 경쟁사에는 있는데 평화빌딩에 없는 권종 파악
+    - 경쟁사에는 있는데 우리 주차장에 없는 권종 파악
     - 품절 중인 권종 집계 (수요 지표)
     """
     RADIUS = 500
@@ -293,14 +383,14 @@ def analyze_gap(tickets):
         return "기타"
 
     nearby = [t for t in tickets if t["dist"] <= RADIUS and t["price"] > 0]
-    cpbc   = [t for t in tickets if "평화빌딩" in t["lot"] and t["price"] > 0]
+    cpbc   = [t for t in tickets if my_lot in t["lot"] and t["price"] > 0]
 
     cpbc_cats = {categorize(t["name"]) for t in cpbc}
 
     # 경쟁사 권종별 집계
     competitor_stats = {}
     for t in nearby:
-        if "평화빌딩" in t["lot"]: continue
+        if my_lot in t["lot"]: continue
         cat = categorize(t["name"])
         if cat not in competitor_stats:
             competitor_stats[cat] = {"total": 0, "soldout": 0, "prices": []}
@@ -324,7 +414,7 @@ def analyze_gap(tickets):
 
 
 # ── AI 전략 분석 ─────────────────────────────────────────────
-def get_ai_insight(summary, cpbc_tickets, gap=None):
+def get_ai_insight(summary, cpbc_tickets, gap=None, my_lot=MY_LOT_DEFAULT):
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         return None
@@ -338,29 +428,22 @@ def get_ai_insight(summary, cpbc_tickets, gap=None):
 
     prompt = f"""
 당신은 주차장 요금 전략을 분석하는 전문가입니다.
-현재 '평화빌딩' 주차장의 할인권 판매 가격과, 반경 500m 이내 주변 파트너 주차장들의 평균 할인권 가격 데이터를 드립니다.
-
-[평화빌딩 주차장 운영 특성]
-- 빌딩 내 언론사(CPBC) 입주로 인해 낮 시간대 고정 주차 수요가 높음 (방송 출연진, 취재 차량, 직원 등)
-- 고정 주차 차량이 자리를 오래 점유하는 구조이므로, 외부 이용객 대상으로는 빠른 회전율이 수익에 직결됨
-- 당일권 가격이 주변 대비 저렴하거나 평균 수준이면, 종일 고정 점유 목적의 이용자가 몰려 회전율이 오히려 떨어지는 역효과가 발생함
-- 따라서 당일권은 주변 평균보다 다소 높게 유지하는 것이 고정 점유를 억제하고 회전율을 높이는 데 유리함
-- 단, 지나치게 높으면 당일권 판매 자체가 줄어드므로 적정 상한선 내에서 전략적으로 설정해야 함
+현재 '{my_lot}' 주차장의 할인권 판매 가격과, 반경 500m 이내 주변 파트너 주차장들의 평균 할인권 가격 데이터를 드립니다.
 
 [주변 주차장 권종별 평균가 (500m 이내)]
 {json.dumps(summary, ensure_ascii=False, indent=2)}
 
-[평화빌딩 주차장 현재 할인권]
+[{my_lot} 주차장 현재 할인권]
 {json.dumps([t for t in cpbc_tickets if t['price'] > 0], ensure_ascii=False, indent=2)}
 
 [권종별 틈새 수요 분석 (500m 이내, 품절률 내림차순)]
-- has_cpbc: 평화빌딩에 해당 권종 존재 여부
+- has_cpbc: {my_lot}에 해당 권종 존재 여부
 - soldout_rate: 현재 시점 경쟁사 품절 비율 (수요 강도 지표)
 {json.dumps(gap or [], ensure_ascii=False, indent=2)}
 
-위 운영 특성과 데이터를 종합하여 두 가지를 분석해 주세요.
+위 데이터를 종합하여 두 가지를 분석해 주세요.
 1) 현재 요금 경쟁력 및 수익 최적화 전략
-2) 틈새 수요 분석: 경쟁사에서 품절률이 높은 권종 중 평화빌딩에 없는 것이 있다면 도입 가치를 평가해 주세요. 품절률이 높을수록 수요가 강한 신호입니다.
+2) 틈새 수요 분석: 경쟁사에서 품절률이 높은 권종 중 {my_lot}에 없는 것이 있다면 도입 가치를 평가해 주세요. 품절률이 높을수록 수요가 강한 신호입니다.
 전체 4~5문장, 전문적이고 핵심만 간결하게. 마크다운 없이 순수 텍스트(간단한 이모지 허용)로 작성해 주세요.
 """
     for attempt in range(3):
@@ -378,7 +461,7 @@ def get_ai_insight(summary, cpbc_tickets, gap=None):
 
 
 # ── HTML 대시보드 생성 ───────────────────────────────────────
-def build_html(lots, tickets, changes, snap_history, now_str, sheet_id, analysis=None, summary=None, ai_insight=None):
+def build_html(lots, tickets, changes, snap_history, now_str, sheet_id, analysis=None, summary=None, ai_insight=None, location_name=LOC_DEFAULT, radius=RADIUS, my_lot=MY_LOT_DEFAULT):
     lots_json    = json.dumps(lots,    ensure_ascii=False)
     tickets_json = json.dumps(tickets, ensure_ascii=False)
     sheets_url   = f"https://docs.google.com/spreadsheets/d/{sheet_id}"
@@ -428,7 +511,7 @@ def build_html(lots, tickets, changes, snap_history, now_str, sheet_id, analysis
             for a in analysis
         )
     else:
-        analysis_rows = '<div style="color:var(--t3);font-size:12px;padding:12px 16px">평화빌딩 주차장 판매중 할인권 없음</div>'
+        analysis_rows = f'<div style="color:var(--t3);font-size:12px;padding:12px 16px">{my_lot} 판매중 할인권 없음</div>'
 
     if ai_insight:
         ai_html = f'<div style="margin:16px;padding:14px;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);border-radius:8px;font-size:12px;color:var(--t1);line-height:1.6;"><strong>🤖 AI 가격 전략 리포트</strong><div style="color:var(--t2);margin-top:6px;">{ai_insight}</div></div>'
@@ -445,7 +528,7 @@ def build_html(lots, tickets, changes, snap_history, now_str, sheet_id, analysis
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CPBC 주변 주차장 현황</title>
+<title>주변 주차장 현황 - {location_name}</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 *{{margin:0;padding:0;box-sizing:border-box}}
@@ -543,7 +626,7 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
   <div class="hdr">
     <div class="hdr-l">
       <div class="logo">🅿</div>
-      <div><h1>CPBC 주변 주차장 현황</h1><p>삼일대로 330 기준 반경 1km · 모두의주차 데이터</p></div>
+      <div><h1>주변 주차장 현황</h1><p>{location_name} 기준 반경 {radius}m · 모두의주차 데이터</p></div>
     </div>
     <div class="hdr-r">
       <span class="badge">{now_str}</span>
@@ -552,7 +635,7 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
     </div>
   </div>
   <div class="kpi">
-    <div class="kcard b"><div class="kl">주차장 수</div><div class="kv b">{len(lots)}</div><div class="ks">반경 1km 이내</div></div>
+    <div class="kcard b"><div class="kl">주차장 수</div><div class="kv b">{len(lots)}</div><div class="ks">반경 {radius}m 이내</div></div>
     <div class="kcard g"><div class="kl">파트너</div><div class="kv g">{partners}</div><div class="ks">앱 결제 가능</div></div>
     <div class="kcard y"><div class="kl">할인권 보유</div><div class="kv y">{with_tick}</div><div class="ks">개 주차장</div></div>
     <div class="kcard r"><div class="kl">최저 1시간</div><div class="kv r">{f"{min_p['p60']:,}원" if min_p else "-"}</div><div class="ks">{min_p['name'][:12] if min_p else "-"}</div></div>
@@ -631,7 +714,7 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
       </div>
       <div>{analysis_rows}</div>
       {ai_html}
-      <div class="sb"><span>평화빌딩 주차장 할인권 적정성 검토</span><span style="color:var(--t3)">±20% 기준 판단</span></div>
+      <div class="sb"><span>{my_lot} 할인권 적정성 검토</span><span style="color:var(--t3)">±20% 기준 판단</span></div>
     </div>
   </div>
 </div>
@@ -711,19 +794,54 @@ rP();rT();
 </html>"""
 
 
+# ── CLI ─────────────────────────────────────────────────────
+def parse_args():
+    p = argparse.ArgumentParser(description="모두의주차 주차장 현황 수집")
+    g = p.add_mutually_exclusive_group()
+    g.add_argument("--address", metavar="주소", help="검색 기준 주소 (예: 서울시 중구 삼일대로 330)")
+    g.add_argument("--lat",     type=float,   help="기준 위도 (--lng 와 함께 사용)")
+    p.add_argument("--lng",     type=float,   help="기준 경도")
+    p.add_argument("--radius",  type=int, default=RADIUS, metavar="m",
+                   help=f"검색 반경(m), 기본값: {RADIUS}")
+    p.add_argument("--my-lot",  default=MY_LOT_DEFAULT, metavar="주차장명",
+                   help=f"할인권 분석 대상 주차장명, 기본값: {MY_LOT_DEFAULT}")
+    return p.parse_args()
+
+
 # ── 메인 ────────────────────────────────────────────────────
 if __name__ == "__main__":
+    args = parse_args()
+
+    # 기준 좌표 결정
+    if args.address:
+        print(f"주소 검색 중: {args.address}")
+        center_lat, center_lng = geocode_address(args.address)
+        location_name = args.address
+        print(f"  좌표: {center_lat:.6f}, {center_lng:.6f}")
+    elif args.lat is not None and args.lng is not None:
+        center_lat, center_lng = args.lat, args.lng
+        location_name = f"{center_lat:.5f}, {center_lng:.5f}"
+    else:
+        center_lat, center_lng = CPBC_LAT, CPBC_LNG
+        location_name = LOC_DEFAULT
+
+    radius = args.radius
+    my_lot = args.my_lot
+    is_default = (center_lat == CPBC_LAT and center_lng == CPBC_LNG and radius == RADIUS)
+
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{now_str}] 모두의주차 API 수집 중...")
+    print(f"  기준: {location_name} (반경 {radius}m)")
 
-    raw = fetch_api()
-    lots, tickets = parse(raw)
+    geohashes = geohash_expand(center_lat, center_lng, radius)
+    raw = fetch_api(geohashes)
+    lots, tickets = parse(raw, center_lat, center_lng, radius)
     print(f"  주차장 {len(lots)}개 / 할인권 {len(tickets)}개 수집")
 
     old_snap = load_snap()
     changes  = compare(old_snap, lots, tickets)
 
-    # 스냅샷 이력 관리 (최대 365개)
+    # 스냅샷 이력 관리 (최대 365개) — 기본 모드에서만 저장
     hist_file = os.path.join(BASE_DIR, "history.json")
     if os.path.exists(hist_file):
         with open(hist_file, "r", encoding="utf-8") as f:
@@ -731,13 +849,13 @@ if __name__ == "__main__":
     else:
         snap_history = []
 
-    snap_history.append({"ts": now_str})
-    if len(snap_history) > 365:
-        snap_history = snap_history[-365:]
-    with open(hist_file, "w", encoding="utf-8") as f:
-        json.dump(snap_history, f, ensure_ascii=False)
-
-    save_snap(lots, tickets)
+    if is_default:
+        snap_history.append({"ts": now_str})
+        if len(snap_history) > 365:
+            snap_history = snap_history[-365:]
+        with open(hist_file, "w", encoding="utf-8") as f:
+            json.dump(snap_history, f, ensure_ascii=False)
+        save_snap(lots, tickets)
 
     if changes:
         print(f"  🔔 변경사항 {len(changes)}건:")
@@ -746,26 +864,28 @@ if __name__ == "__main__":
     else:
         print("  변경사항 없음")
 
-    print("Google Sheets 기록 중...")
-    gc = get_gc()
-    write_sheets(gc, lots, tickets, changes, now_str)
+    if is_default:
+        print("Google Sheets 기록 중...")
+        gc = get_gc()
+        write_sheets(gc, lots, tickets, changes, now_str)
 
     print("할인권 적정성 분석 중...")
-    analysis, summary, avgs = analyze_tickets(tickets)
+    analysis, summary, avgs = analyze_tickets(tickets, my_lot)
     for a in analysis:
         print(f"  [{a['label']}] {a['name']} {a['price']:,}원 - {a['comment']}")
 
     print("AI 전략 분석 중...")
-    cpbc_tickets = [t for t in tickets if "평화빌딩" in t["lot"] and t["open"] and not t["soldout"]]
-    gap = analyze_gap(tickets)
-    ai_insight = get_ai_insight(summary, cpbc_tickets, gap)
+    my_tickets = [t for t in tickets if my_lot in t["lot"] and t["open"] and not t["soldout"]]
+    gap = analyze_gap(tickets, my_lot)
+    ai_insight = get_ai_insight(summary, my_tickets, gap, my_lot)
     if ai_insight:
         print("  🤖 AI 분석 완료")
     else:
         print("  AI 분석 건너뜀 (API 키 없음)")
 
     print("대시보드 HTML 생성 중...")
-    html = build_html(lots, tickets, changes, snap_history, now_str, SHEET_ID, analysis, summary, ai_insight)
+    html = build_html(lots, tickets, changes, snap_history, now_str, SHEET_ID,
+                      analysis, summary, ai_insight, location_name, radius, my_lot)
     html_path = os.path.join(BASE_DIR, "modu_dashboard.html")
     with open(html_path, "w", encoding="utf-8") as f:
         f.write(html)
