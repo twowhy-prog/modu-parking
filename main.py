@@ -299,7 +299,7 @@ def analyze_tickets(tickets, my_lot=MY_LOT_DEFAULT):
     - 당일권 / 3시간권 / 기타 로 분류
     - 평균가 대비 ±20% 기준으로 저렴/적정/비쌈 판단
     """
-    PARTNER_RADIUS = 500
+    PARTNER_RADIUS = 300
 
     def categorize(name):
         if "당일" in name: return "당일권"
@@ -428,9 +428,16 @@ def get_ai_insight(summary, cpbc_tickets, gap=None, my_lot=MY_LOT_DEFAULT):
 
     prompt = f"""
 당신은 주차장 요금 전략을 분석하는 전문가입니다.
-현재 '{my_lot}' 주차장의 할인권 판매 가격과, 반경 500m 이내 주변 파트너 주차장들의 평균 할인권 가격 데이터를 드립니다.
+현재 '{my_lot}' 주차장의 할인권 판매 가격과, 반경 300m 이내 주변 파트너 주차장들의 평균 할인권 가격 데이터를 드립니다.
 
-[주변 주차장 권종별 평균가 (500m 이내)]
+[{my_lot} 주차장 운영 특성]
+- 빌딩 내 언론사(CPBC) 입주로 인해 낮 시간대 고정 주차 수요가 높음 (방송 출연진, 취재 차량, 직원 등)
+- 고정 주차 차량이 자리를 오래 점유하는 구조이므로, 외부 이용객 대상으로는 빠른 회전율이 수익에 직결됨
+- 당일권 가격이 주변 대비 저렴하거나 평균 수준이면, 종일 고정 점유 목적의 이용자가 몰려 회전율이 오히려 떨어지는 역효과가 발생함
+- 따라서 당일권은 주변 평균보다 다소 높게 유지하는 것이 고정 점유를 억제하고 회전율을 높이는 데 유리함
+- 단, 지나치게 높으면 당일권 판매 자체가 줄어드므로 적정 상한선 내에서 전략적으로 설정해야 함
+
+[주변 주차장 권종별 평균가 (300m 이내)]
 {json.dumps(summary, ensure_ascii=False, indent=2)}
 
 [{my_lot} 주차장 현재 할인권]
@@ -500,7 +507,7 @@ def build_html(lots, tickets, changes, snap_history, now_str, sheet_id, analysis
             for s in summary
         )
     else:
-        summary_html = '<span style="color:var(--t3);font-size:11px">500m 이내 파트너 할인권 데이터 없음</span>'
+        summary_html = '<span style="color:var(--t3);font-size:11px">300m 이내 파트너 할인권 데이터 없음</span>'
 
     if analysis:
         analysis_rows = "".join(
@@ -679,8 +686,8 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
       </div>
       <div class="sw">
         <span class="sl">거리</span>
-        <input type="range" id="pd" min="100" max="1000" step="50" value="1000" oninput="document.getElementById('pdv').textContent=this.value+'m';rP()">
-        <span class="sv" id="pdv">1000m</span>
+        <input type="range" id="pd" min="100" max="1000" step="50" value="300" oninput="document.getElementById('pdv').textContent=this.value+'m';rP()">
+        <span class="sv" id="pdv">300m</span>
       </div>
       <div class="tw"><table>
         <thead><tr>
@@ -709,8 +716,8 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
       </div>
       <div class="sw">
         <span class="sl">거리</span>
-        <input type="range" id="td" min="100" max="1000" step="50" value="1000" oninput="document.getElementById('tdv').textContent=this.value+'m';rT()">
-        <span class="sv" id="tdv">1000m</span>
+        <input type="range" id="td" min="100" max="1000" step="50" value="300" oninput="document.getElementById('tdv').textContent=this.value+'m';rT()">
+        <span class="sv" id="tdv">300m</span>
       </div>
       <div class="tw"><table>
         <thead><tr>
@@ -733,7 +740,7 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
     <div class="panel full">
       <div class="ph">
         <div class="pt"><span class="dot" style="background:#8B5CF6"></span>할인권 적정성 분석</div>
-        <span class="pc" style="color:#A78BFA">500m 이내 파트너 기준</span>
+        <span class="pc" style="color:#A78BFA">300m 이내 파트너 기준</span>
       </div>
       <div class="ana-summary">
         <span style="font-size:11px;color:var(--t3);margin-right:4px">주변 평균가</span>
