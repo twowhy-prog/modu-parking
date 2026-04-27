@@ -488,11 +488,30 @@ def build_html(lots, tickets, changes, snap_history, now_str, sheet_id, analysis
             change_count = f"{len(changes)}건"
             kc = {"요금변경":"#F59E0B","할인권신규":"#10B981","할인권삭제":"#EF4444",
                   "할인권상태변경":"#818CF8","할인권품절":"#94A3B8","삭제":"#EF4444"}
-            change_html = "".join(f"""
-            <div class="change-row">
-              <span class="change-badge" style="background:{kc.get(c['kind'],'#94A3B8')}22;color:{kc.get(c['kind'],'#94A3B8')};border-color:{kc.get(c['kind'],'#94A3B8')}44">{c['kind']}</span>
-              <div><div class="change-name">{c['name']}</div><div class="change-desc">{c['desc']}</div></div>
-            </div>""" for c in changes)
+            grouped = {}
+            for c in changes:
+                grouped.setdefault(c['name'], []).append(c)
+            parts = []
+            for name, items in grouped.items():
+                badges = "".join(
+                    f'<span class="change-badge" style="background:{kc.get(c["kind"],"#94A3B8")}22;color:{kc.get(c["kind"],"#94A3B8")};border-color:{kc.get(c["kind"],"#94A3B8")}44">{c["kind"]}</span>'
+                    for c in items
+                )
+                rows = "".join(
+                    f'<div class="change-row" style="padding-left:28px">'
+                    f'<span class="change-badge" style="background:{kc.get(c["kind"],"#94A3B8")}22;color:{kc.get(c["kind"],"#94A3B8")};border-color:{kc.get(c["kind"],"#94A3B8")}44">{c["kind"]}</span>'
+                    f'<div class="change-desc">{c["desc"]}</div></div>'
+                    for c in items
+                )
+                parts.append(
+                    f'<div class="cg">'
+                    f'<div class="cg-hdr" onclick="tCG(this)">'
+                    f'<span class="cg-name">{name}</span>'
+                    f'<span class="cg-badges">{badges}</span>'
+                    f'<span class="cg-arr">▼</span></div>'
+                    f'<div class="cg-body">{rows}</div></div>'
+                )
+            change_html = f'<div class="change-wrap">{"".join(parts)}</div>'
 
     # 적정성 분석 HTML
     analysis = analysis or []
@@ -598,9 +617,20 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
 .tag.open{{background:rgba(16,185,129,.15);color:var(--green);border:1px solid rgba(16,185,129,.3)}}
 .tag.closed{{background:rgba(100,116,139,.15);color:var(--t3);border:1px solid var(--bd)}}
 .tag.soldout{{background:rgba(245,158,11,.15);color:var(--yellow);border:1px solid rgba(245,158,11,.3)}}
-.change-row{{padding:9px 16px;border-bottom:1px solid rgba(42,53,80,.4);display:flex;align-items:flex-start;gap:8px;font-size:12px}}
+.my-lot{{background:rgba(245,158,11,.07)!important;border-left:2px solid var(--yellow)}}
+.my-lot:hover{{background:rgba(245,158,11,.13)!important}}
+.my-lot-name{{color:var(--yellow)!important;font-weight:700!important}}
+.change-wrap{{overflow-y:auto;max-height:150px}}
+.cg-hdr{{padding:7px 14px;display:flex;align-items:center;gap:7px;cursor:pointer;border-bottom:1px solid rgba(42,53,80,.4);user-select:none}}
+.cg-hdr:hover{{background:var(--s2)}}
+.cg-name{{font-size:12px;font-weight:600;color:var(--t1);flex:1}}
+.cg-badges{{display:flex;gap:3px;flex-wrap:wrap}}
+.cg-arr{{font-size:9px;color:var(--t3);transition:transform .2s;flex-shrink:0}}
+.cg-arr.open{{transform:rotate(180deg)}}
+.cg-body{{display:none}}.cg-body.open{{display:block}}
+.change-row{{padding:7px 14px;border-bottom:1px solid rgba(42,53,80,.3);display:flex;align-items:flex-start;gap:8px;font-size:12px;background:rgba(10,14,26,.3)}}
 .change-badge{{font-size:9px;padding:2px 6px;border-radius:3px;font-weight:700;border:1px solid;white-space:nowrap;flex-shrink:0;margin-top:1px}}
-.change-name{{color:var(--t1);font-weight:500}}.change-desc{{color:var(--t3);margin-top:2px;font-size:11px}}
+.change-desc{{color:var(--t3);font-size:11px;padding-top:2px}}
 .empty{{padding:36px;text-align:center;color:var(--t3)}}.empty span{{font-size:28px;display:block;margin-bottom:8px;opacity:.4}}.empty p{{font-size:12px}}
 .sb{{padding:6px 12px;font-size:11px;color:var(--t3);border-top:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center}}
 .sb a{{color:#34A853;text-decoration:none;font-size:11px}}.sb a:hover{{text-decoration:underline}}
@@ -682,6 +712,7 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
         <button class="fb-btn on" onclick="pF('all',this)">전체</button>
         <button class="fb-btn" onclick="pF('partner',this)">파트너</button>
         <button class="fb-btn" onclick="pF('cheap',this)">저렴 ≤4천</button>
+        <button class="fb-btn mech-btn" onclick="tPMech(this)">기계식 제외</button>
         <input class="fb-search" id="ps" placeholder="🔍 검색..." oninput="rP()">
       </div>
       <div class="sw">
@@ -706,6 +737,7 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
       <div class="ph"><div class="pt"><span class="dot g"></span>할인권·선불권</div><span class="pc" id="t-cnt"></span></div>
       <div class="fb">
         <button class="fb-btn on" onclick="tTglOpen(this)">판매중만</button>
+        <button class="fb-btn mech-btn" onclick="tTMech(this)">기계식 제외</button>
         <div style="width:1px;height:12px;background:var(--bd);margin:0 4px;"></div>
         <button class="fb-btn type-btn on" onclick="tF('all',this)">전체</button>
         <button class="fb-btn type-btn" onclick="tF('night',this)">심야</button>
@@ -770,8 +802,11 @@ const TICKETS={tickets_json};
 var LIVE_LOTS=null,LIVE_TICKETS=null;
 function gL(){{return LIVE_LOTS||LOTS;}}
 function gT(){{return LIVE_TICKETS||TICKETS;}}
-let pFlt='all',pSK='p60',pSA=true;
-let tFlt='all',tOpenOnly=true,tSK='dist',tSA=true;
+const MY_LOT='평화빌딩';
+let pFlt='all',pSK='p60',pSA=true,pExMech=false;
+let tFlt='all',tOpenOnly=true,tSK='dist',tSA=true,tExMech=false;
+function tPMech(el){{pExMech=!pExMech;el.classList.toggle('on');rP();}}
+function tTMech(el){{tExMech=!tExMech;el.classList.toggle('on');rT();}}
 function fp(v){{if(v==null)return'-';if(v===0)return'무료';return v.toLocaleString()+'원';}}
 function pc(v){{if(v==null)return'';if(v===0)return'free';if(v<=3000)return'low';if(v<=6000)return'mid';return'high';}}
 function pF(f,el){{pFlt=f;document.querySelectorAll('#pp .fb-btn').forEach(b=>b.classList.remove('on'));el.classList.add('on');rP();}}
@@ -779,7 +814,7 @@ function sP(k){{if(pSK===k)pSA=!pSA;else{{pSK=k;pSA=true;}}rP();}}
 function rP(){{
   const s=document.getElementById('ps').value.toLowerCase();
   const md=+document.getElementById('pd').value;
-  let d=gL().filter(l=>{{if(l.dist>md)return false;if(l.p30==null&&l.p60==null&&l.p120==null&&l.p180==null)return false;if(pFlt==='partner'&&!l.partner)return false;if(pFlt==='cheap'&&(l.p60==null||l.p60>4000))return false;if(s&&!l.name.toLowerCase().includes(s))return false;return true;}});
+  let d=gL().filter(l=>{{if(l.dist>md)return false;if(l.p30==null&&l.p60==null&&l.p120==null&&l.p180==null)return false;if(pFlt==='partner'&&!l.partner)return false;if(pFlt==='cheap'&&(l.p60==null||l.p60>4000))return false;if(pExMech&&l.name.includes('기계식'))return false;if(s&&!l.name.toLowerCase().includes(s))return false;return true;}});
   d.sort((a,b)=>{{let av=a[pSK],bv=b[pSK];if(av==null)av=99999;if(bv==null)bv=99999;if(typeof av==='string')return pSA?av.localeCompare(bv):bv.localeCompare(av);return pSA?av-bv:bv-av;}});
   const km={{name:0,dist:1,p30:2,p60:3,p120:4,p180:5}};
   [0,1,2,3,4,5].forEach(i=>{{const th=document.getElementById('ph'+i);th.className='';if(km[pSK]===i)th.className=pSA?'sa':'sd';}});
@@ -787,7 +822,7 @@ function rP(){{
   document.getElementById('p-st').textContent=`전체 ${{gL().length}}개 중 ${{d.length}}개`;
   const tb=document.getElementById('pb');
   if(!d.length){{tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">없음</td></tr>';return;}}
-  tb.innerHTML=d.map(l=>`<tr onclick="openModal('${{l.name.replace(/'/g,"\\'")}}', ${{l.dist}}, ${{l.partner}}, ${{l.p60!==null?l.p60:'null'}}, ${{l.seq}}, ${{l.lat}}, ${{l.lng}})" style="cursor:pointer"><td class="nc">${{l.name}}${{l.partner?' <span class="tag partner">파트너</span>':''}}</td><td><span class="dist">${{l.dist}}m</span></td><td class="p ${{pc(l.p30)}}">${{fp(l.p30)}}</td><td class="p ${{pc(l.p60)}}">${{fp(l.p60)}}</td><td class="p ${{pc(l.p120)}}">${{fp(l.p120)}}</td><td class="p ${{pc(l.p180)}}">${{fp(l.p180)}}</td></tr>`).join('');
+  tb.innerHTML=d.map(l=>{{const ml=l.name.includes(MY_LOT);return`<tr class="${{ml?'my-lot':''}}" onclick="openModal('${{l.name.replace(/'/g,"\\'")}}', ${{l.dist}}, ${{l.partner}}, ${{l.p60!==null?l.p60:'null'}}, ${{l.seq}}, ${{l.lat}}, ${{l.lng}})" style="cursor:pointer"><td class="nc ${{ml?'my-lot-name':''}}">${{l.name}}${{l.partner?' <span class="tag partner">파트너</span>':''}}</td><td><span class="dist">${{l.dist}}m</span></td><td class="p ${{pc(l.p30)}}">${{fp(l.p30)}}</td><td class="p ${{pc(l.p60)}}">${{fp(l.p60)}}</td><td class="p ${{pc(l.p120)}}">${{fp(l.p120)}}</td><td class="p ${{pc(l.p180)}}">${{fp(l.p180)}}</td></tr>`;}}).join('');
 }}
 function tTglOpen(el){{tOpenOnly=!tOpenOnly;if(tOpenOnly)el.classList.add('on');else el.classList.remove('on');rT();}}
 function tF(f,el){{tFlt=f;document.querySelectorAll('#tp .type-btn').forEach(b=>b.classList.remove('on'));el.classList.add('on');rT();}}
@@ -795,7 +830,7 @@ function sT(k){{if(tSK===k)tSA=!tSA;else{{tSK=k;tSA=true;}}rT();}}
 function rT(){{
   const s=document.getElementById('ts').value.toLowerCase();
   const md=+document.getElementById('td').value;
-  let d=gT().filter(t=>{{if(t.dist>md)return false;if(tOpenOnly&&(!t.open||t.soldout))return false;if(tFlt==='night'&&!t.name.includes('심야'))return false;if(tFlt==='day'&&!t.name.includes('당일'))return false;if(tFlt==='hour'&&!/(시간|h)/i.test(t.name))return false;if(tFlt==='month'&&!t.name.includes('월'))return false;if(s&&!t.lot.toLowerCase().includes(s)&&!t.name.toLowerCase().includes(s))return false;return true;}});
+  let d=gT().filter(t=>{{if(t.dist>md)return false;if(tOpenOnly&&(!t.open||t.soldout))return false;if(tFlt==='night'&&!t.name.includes('심야'))return false;if(tFlt==='day'&&!t.name.includes('당일'))return false;if(tFlt==='hour'&&!/(시간|h)/i.test(t.name))return false;if(tFlt==='month'&&!t.name.includes('월'))return false;if(tExMech&&t.lot.includes('기계식'))return false;if(s&&!t.lot.toLowerCase().includes(s)&&!t.name.toLowerCase().includes(s))return false;return true;}});
   d.sort((a,b)=>{{let av=a[tSK],bv=b[tSK];if(typeof av==='string')return tSA?av.localeCompare(bv):bv.localeCompare(av);return tSA?av-bv:bv-av;}});
   const km={{lot:0,dist:1,name:2,price:3}};
   [0,1,2,3].forEach(i=>{{const th=document.getElementById('th'+i);th.className='';if(km[tSK]===i)th.className=tSA?'sa':'sd';}});
@@ -803,7 +838,7 @@ function rT(){{
   document.getElementById('t-st').textContent=`전체 ${{gT().length}}개 중 ${{d.length}}개`;
   const tb=document.getElementById('tb');
   if(!d.length){{tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">없음</td></tr>';return;}}
-  tb.innerHTML=d.map(t=>{{const st=t.soldout?'<span class="tag soldout">품절</span>':t.open?'<span class="tag open">판매중</span>':'<span class="tag closed">비판매</span>';return`<tr class="${{(!t.open||t.soldout)?'rdim':''}}" onclick="openModal('${{t.lot.replace(/'/g,"\\'")}}', ${{t.dist}}, ${{t.partner}}, null, ${{t.seq}}, ${{t.lat}}, ${{t.lng}})" style="cursor:pointer"><td class="nc">${{t.lot}}${{t.partner?' <span class="tag partner">파트너</span>':''}}</td><td><span class="dist">${{t.dist}}m</span></td><td>${{t.name}}</td><td class="p mid">${{t.price.toLocaleString()}}원</td><td class="tc">${{t.time}}</td><td>${{st}}</td></tr>`;}}).join('');
+  tb.innerHTML=d.map(t=>{{const st=t.soldout?'<span class="tag soldout">품절</span>':t.open?'<span class="tag open">판매중</span>':'<span class="tag closed">비판매</span>';const ml=t.lot.includes(MY_LOT);return`<tr class="${{((!t.open||t.soldout)?'rdim':'')+' '+(ml?'my-lot':'')}}" onclick="openModal('${{t.lot.replace(/'/g,"\\'")}}', ${{t.dist}}, ${{t.partner}}, null, ${{t.seq}}, ${{t.lat}}, ${{t.lng}})" style="cursor:pointer"><td class="nc ${{ml?'my-lot-name':''}}">${{t.lot}}${{t.partner?' <span class="tag partner">파트너</span>':''}}</td><td><span class="dist">${{t.dist}}m</span></td><td>${{t.name}}</td><td class="p mid">${{t.price.toLocaleString()}}원</td><td class="tc">${{t.time}}</td><td>${{st}}</td></tr>`;}}).join('');
 }}
 let currentSeq = null, currentLat = null, currentLng = null;
 function openModal(name, dist, partner, p60, seq, lat, lng){{
@@ -950,6 +985,12 @@ function resetSearch(){{
   document.querySelector('.hdr p').textContent='{location_name} 기준 반경 {radius}m · 모두의주차 데이터';
   _setSliderMax({radius});
   rP();rT();
+}}
+function tCG(el){{
+  const body=el.nextElementSibling;
+  const arr=el.querySelector('.cg-arr');
+  body.classList.toggle('open');
+  arr.classList.toggle('open');
 }}
 rP();rT();
 </script>
