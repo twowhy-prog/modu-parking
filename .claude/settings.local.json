@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh repo *)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(python -c \"from vibevoice import VibeVoiceStreamingProcessor; import inspect; print\\(inspect.signature\\(VibeVoiceStreamingProcessor.__call__\\)\\)\")",
+      "Bash(git add *)"
+    ]
+  }
+}

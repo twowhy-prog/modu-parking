@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "VoiceStudio UI 미리보기",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "7861", "--directory", "vibevoice-web/frontend"],
+      "port": 7861
+    },
+    {
+      "name": "VoiceStudio 서버 (모델 포함)",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["vibevoice-web/backend/main.py", "--port", "7860"],
+      "port": 7860
+    },
+    {
+      "name": "나만의 TTS 서버 (구버전)",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["tts_app/server.py", "--port", "7862", "--device", "cpu"],
+      "port": 7862
+    }
+  ]
+}

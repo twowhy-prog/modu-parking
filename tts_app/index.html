@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>나만의 TTS</title>
+<style>
+  :root {
+    --bg: #0f0f13;
+    --surface: #1a1a24;
+    --border: #2e2e42;
+    --accent: #7c6af7;
+    --accent-hover: #9d8fff;
+    --text: #e8e6f0;
+    --muted: #7a7890;
+    --green: #4ade80;
+    --red: #f87171;
+    --radius: 12px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 680px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--text);
+  }
+  h1 span { color: var(--accent); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 1rem;
+    line-height: 1.6;
+    padding: 12px 14px;
+    resize: vertical;
+    min-height: 120px;
+    outline: none;
+    transition: border-color 0.2s;
+    font-family: inherit;
+  }
+  textarea:focus { border-color: var(--accent); }
+  textarea::placeholder { color: var(--muted); }
+
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+
+  label {
+    font-size: 0.8rem;
+    color: var(--muted);
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.95rem;
+    padding: 10px 12px;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237a7890' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+  }
+
+  .slider-group { display: flex; flex-direction: column; gap: 6px; }
+  .slider-row { display: flex; align-items: center; gap: 10px; }
+  input[type=range] {
+    flex: 1;
+    accent-color: var(--accent);
+    height: 4px;
+    cursor: pointer;
+  }
+  .slider-val {
+    font-size: 0.85rem;
+    color: var(--accent);
+    min-width: 32px;
+    text-align: right;
+    font-weight: 600;
+  }
+
+  .btn-row {
+    display: flex;
+    gap: 10px;
+  }
+
+  button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 600;
+    padding: 11px 20px;
+    transition: all 0.18s;
+    font-family: inherit;
+  }
+
+  #btn-generate {
+    background: var(--accent);
+    color: #fff;
+    flex: 1;
+  }
+  #btn-generate:hover:not(:disabled) { background: var(--accent-hover); }
+  #btn-generate:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  #btn-stop {
+    background: var(--border);
+    color: var(--text);
+    display: none;
+  }
+  #btn-stop:hover { background: #3a3a50; }
+
+  #btn-save {
+    background: var(--border);
+    color: var(--text);
+    display: none;
+  }
+  #btn-save:hover { background: #3a3a50; }
+
+  /* 오디오 시각화 */
+  .waveform-area {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  canvas#waveform {
+    width: 100%;
+    height: 60px;
+    border-radius: 8px;
+    background: var(--bg);
+    display: block;
+  }
+
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+  }
+  .dot.streaming { background: var(--accent); animation: pulse 1s infinite; }
+  .dot.done { background: var(--green); }
+  .dot.error { background: var(--red); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* 로그 */
+  #log-area {
+    display: none;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.78rem;
+    color: var(--muted);
+    max-height: 100px;
+    overflow-y: auto;
+    font-family: 'Consolas', monospace;
+    line-height: 1.6;
+  }
+
+  .stat-row {
+    display: flex;
+    gap: 16px;
+    font-size: 0.82rem;
+    color: var(--muted);
+    flex-wrap: wrap;
+  }
+  .stat { display: flex; gap: 4px; }
+  .stat b { color: var(--text); }
+
+  @media (max-width: 480px) {
+    .controls { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>나만의 <span>TTS</span></h1>
+
+  <div class="card">
+    <textarea id="text-input" placeholder="읽어줄 텍스트를 입력하세요...&#10;영어와 중국어를 지원합니다." rows="5"></textarea>
+
+    <div class="controls">
+      <div>
+        <label>보이스</label>
+        <select id="voice-select">
+          <option value="">기본 음성</option>
+        </select>
+      </div>
+
+      <div>
+        <div class="slider-group">
+          <label>CFG 스케일 <span class="slider-val" id="cfg-val">3.0</span></label>
+          <div class="slider-row">
+            <input type="range" id="cfg-slider" min="1" max="7" step="0.5" value="3">
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="slider-group">
+          <label>추론 스텝 <span class="slider-val" id="steps-val">16</span></label>
+          <div class="slider-row">
+            <input type="range" id="steps-slider" min="4" max="32" step="4" value="16">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button id="btn-generate">▶ 생성</button>
+      <button id="btn-stop">■ 중단</button>
+      <button id="btn-save">↓ 저장</button>
+    </div>
+  </div>
+
+  <div class="card waveform-area" id="waveform-card">
+    <canvas id="waveform"></canvas>
+    <div class="status-row">
+      <div class="dot" id="status-dot"></div>
+      <span id="status-text">대기 중</span>
+    </div>
+    <div class="stat-row" id="stat-row" style="display:none">
+      <div class="stat">재생 <b id="stat-dur">0.0s</b></div>
+      <div class="stat">생성량 <b id="stat-gen">0.0s</b></div>
+    </div>
+    <div id="log-area"></div>
+  </div>
+</div>
+
+<script>
+const HOST = location.host;
+let ws = null;
+let audioCtx = null;
+let allSamples = [];       // 전체 PCM 저장 (WAV 저장용)
+let sampleRate = 24000;
+let nextPlayTime = 0;
+let isStreaming = false;
+let totalGenSecs = 0;
+let startTime = 0;
+let timerInterval = null;
+
+// ── UI 요소 ──────────────────────────────────────────────
+const textarea  = document.getElementById('text-input');
+const voiceSel  = document.getElementById('voice-select');
+const cfgSlider = document.getElementById('cfg-slider');
+const cfgVal    = document.getElementById('cfg-val');
+const stepsSlider = document.getElementById('steps-slider');
+const stepsVal  = document.getElementById('steps-val');
+const btnGen    = document.getElementById('btn-generate');
+const btnStop   = document.getElementById('btn-stop');
+const btnSave   = document.getElementById('btn-save');
+const waveCard  = document.getElementById('waveform-card');
+const canvas    = document.getElementById('waveform');
+const dot       = document.getElementById('status-dot');
+const statusTxt = document.getElementById('status-text');
+const statRow   = document.getElementById('stat-row');
+const statDur   = document.getElementById('stat-dur');
+const statGen   = document.getElementById('stat-gen');
+const logArea   = document.getElementById('log-area');
+const ctx2d     = canvas.getContext('2d');
+
+// ── 슬라이더 연동 ────────────────────────────────────────
+cfgSlider.addEventListener('input', () => cfgVal.textContent = parseFloat(cfgSlider.value).toFixed(1));
+stepsSlider.addEventListener('input', () => stepsVal.textContent = stepsSlider.value);
+
+// ── 서버 config 로드 ─────────────────────────────────────
+async function loadConfig() {
+  try {
+    const res = await fetch('/config');
+    const cfg = await res.json();
+    sampleRate = cfg.sample_rate || 24000;
+    (cfg.voices || []).forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v; opt.textContent = v;
+      voiceSel.appendChild(opt);
+    });
+    if (cfg.default_voice) voiceSel.value = cfg.default_voice;
+  } catch(e) {
+    log('config 로드 실패: ' + e.message);
+  }
+}
+loadConfig();
+
+// ── 파형 그리기 ──────────────────────────────────────────
+function drawWaveform(samples) {
+  const W = canvas.width, H = canvas.height;
+  ctx2d.clearRect(0, 0, W, H);
+  ctx2d.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  ctx2d.fillRect(0, 0, W, H);
+
+  if (!samples.length) return;
+  const step = Math.max(1, Math.floor(samples.length / W));
+  ctx2d.beginPath();
+  ctx2d.strokeStyle = '#7c6af7';
+  ctx2d.lineWidth = 1.5;
+
+  for (let x = 0; x < W; x++) {
+    const s = samples[Math.min(x * step, samples.length - 1)] || 0;
+    const y = H / 2 - s * (H / 2 - 4);
+    x === 0 ? ctx2d.moveTo(x, y) : ctx2d.lineTo(x, y);
+  }
+  ctx2d.stroke();
+}
+
+function resizeCanvas() {
+  canvas.width  = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight;
+}
+
+// ── 로그 ─────────────────────────────────────────────────
+function log(msg) {
+  logArea.style.display = 'block';
+  const line = document.createElement('div');
+  line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  logArea.appendChild(line);
+  logArea.scrollTop = logArea.scrollHeight;
+}
+
+function setStatus(type, msg) {
+  dot.className = 'dot ' + type;
+  statusTxt.textContent = msg;
+}
+
+// ── 타이머 ───────────────────────────────────────────────
+function startTimer() {
+  startTime = performance.now();
+  timerInterval = setInterval(() => {
+    const elapsed = (performance.now() - startTime) / 1000;
+    statDur.textContent = elapsed.toFixed(1) + 's';
+  }, 200);
+}
+function stopTimer() {
+  clearInterval(timerInterval);
+  timerInterval = null;
+}
+
+// ── PCM → AudioBuffer 재생 ───────────────────────────────
+function scheduleChunk(pcm16Bytes) {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate });
+  }
+
+  const int16 = new Int16Array(pcm16Bytes);
+  const float32 = new Float32Array(int16.length);
+  for (let i = 0; i < int16.length; i++) {
+    float32[i] = int16[i] / 32768;
+  }
+
+  // 파형 표시용 다운샘플 저장
+  allSamples.push(...float32);
+  resizeCanvas();
+  drawWaveform(allSamples);
+
+  const buf = audioCtx.createBuffer(1, float32.length, sampleRate);
+  buf.getChannelData(0).set(float32);
+
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  src.connect(audioCtx.destination);
+
+  const now = audioCtx.currentTime;
+  const when = Math.max(now, nextPlayTime);
+  src.start(when);
+  nextPlayTime = when + buf.duration;
+  totalGenSecs += buf.duration;
+  statGen.textContent = totalGenSecs.toFixed(1) + 's';
+}
+
+// ── 생성 시작 ─────────────────────────────────────────────
+btnGen.addEventListener('click', startGeneration);
+textarea.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.key === 'Enter') startGeneration();
+});
+
+function startGeneration() {
+  const text = textarea.value.trim();
+  if (!text) { alert('텍스트를 입력해주세요.'); return; }
+  if (isStreaming) return;
+
+  // 초기화
+  allSamples = [];
+  nextPlayTime = 0;
+  totalGenSecs = 0;
+  if (audioCtx) { audioCtx.close(); audioCtx = null; }
+  logArea.innerHTML = '';
+  logArea.style.display = 'none';
+  statRow.style.display = 'none';
+  btnSave.style.display = 'none';
+
+  waveCard.style.display = 'flex';
+  resizeCanvas();
+  drawWaveform([]);
+  setStatus('streaming', '연결 중...');
+
+  const voice = voiceSel.value;
+  const cfg   = cfgSlider.value;
+  const steps = stepsSlider.value;
+  const params = new URLSearchParams({ text, voice, cfg, steps });
+  const wsUrl = `ws://${HOST}/stream?${params}`;
+
+  ws = new WebSocket(wsUrl);
+  ws.binaryType = 'arraybuffer';
+  isStreaming = true;
+  btnGen.disabled = true;
+  btnStop.style.display = '';
+
+  ws.onopen = () => {
+    setStatus('streaming', '음성 생성 중...');
+    startTimer();
+    statRow.style.display = 'flex';
+    log('생성 시작');
+  };
+
+  ws.onmessage = e => {
+    if (typeof e.data === 'string') {
+      const msg = JSON.parse(e.data);
+      if (msg.error) {
+        setStatus('error', '오류: ' + msg.error);
+        log('오류: ' + msg.error);
+      } else if (msg.log) {
+        log(msg.log);
+      }
+      return;
+    }
+    scheduleChunk(e.data);
+  };
+
+  ws.onclose = () => {
+    stopTimer();
+    isStreaming = false;
+    btnGen.disabled = false;
+    btnStop.style.display = 'none';
+    if (allSamples.length > 0) {
+      btnSave.style.display = '';
+      setStatus('done', `완료 — ${totalGenSecs.toFixed(1)}s 생성`);
+      log('완료');
+    } else {
+      setStatus('', '연결 종료');
+    }
+  };
+
+  ws.onerror = () => {
+    setStatus('error', '연결 오류');
+    log('WebSocket 오류');
+  };
+}
+
+// ── 중단 ─────────────────────────────────────────────────
+btnStop.addEventListener('click', () => {
+  if (ws) ws.close();
+  if (audioCtx) audioCtx.suspend();
+  setStatus('', '중단됨');
+  stopTimer();
+});
+
+// ── WAV 저장 ─────────────────────────────────────────────
+btnSave.addEventListener('click', () => {
+  const wav = encodeWav(new Float32Array(allSamples), sampleRate);
+  const url = URL.createObjectURL(new Blob([wav], { type: 'audio/wav' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `tts_${Date.now()}.wav`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+function encodeWav(samples, sr) {
+  const buf = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buf);
+  const write = (off, str) => { for (let i=0;i<str.length;i++) view.setUint8(off+i, str.charCodeAt(i)); };
+  write(0, 'RIFF');
+  view.setUint32(4,  36 + samples.length * 2, true);
+  write(8, 'WAVE');
+  write(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);  // PCM
+  view.setUint16(22, 1, true);  // mono
+  view.setUint32(24, sr, true);
+  view.setUint32(28, sr * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  write(36, 'data');
+  view.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i++) {
+    view.setInt16(44 + i * 2, Math.max(-32768, Math.min(32767, samples[i] * 32768)), true);
+  }
+  return buf;
+}
+
+window.addEventListener('resize', () => { resizeCanvas(); drawWaveform(allSamples); });
+</script>
+</body>
+</html>
