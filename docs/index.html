@@ -66,6 +66,8 @@ tbody td{padding:7px 10px;color:var(--t2);white-space:nowrap}
 .tag.open{background:rgba(16,185,129,.15);color:var(--green);border:1px solid rgba(16,185,129,.3)}
 .tag.closed{background:rgba(100,116,139,.15);color:var(--t3);border:1px solid var(--bd)}
 .tag.soldout{background:rgba(245,158,11,.15);color:var(--yellow);border:1px solid rgba(245,158,11,.3)}
+.tag.ev{background:rgba(16,185,129,.15);color:#10B981;border:1px solid rgba(16,185,129,.3)}
+.tag.ev-dc{background:rgba(16,185,129,.1);color:#059669;border:1px solid rgba(16,185,129,.25)}
 .change-row{padding:9px 16px;border-bottom:1px solid rgba(42,53,80,.4);display:flex;align-items:flex-start;gap:8px;font-size:12px}
 .change-badge{font-size:9px;padding:2px 6px;border-radius:3px;font-weight:700;border:1px solid;white-space:nowrap;flex-shrink:0;margin-top:1px}
 .change-name{color:var(--t1);font-weight:500}.change-desc{color:var(--t3);margin-top:2px;font-size:11px}
@@ -150,6 +152,8 @@ tbody td{padding:7px 10px;color:var(--t2);white-space:nowrap}
         <button class="fb-btn on" onclick="pF('all',this)">전체</button>
         <button class="fb-btn" onclick="pF('partner',this)">파트너</button>
         <button class="fb-btn" onclick="pF('cheap',this)">저렴 ≤4천</button>
+        <button class="fb-btn" onclick="pF('ev',this)">⚡ EV충전</button>
+        <button class="fb-btn" onclick="pF('ev_discount',this)">⚡ EV할인</button>
         <input class="fb-search" id="ps" placeholder="🔍 검색..." oninput="rP()">
       </div>
       <div class="sw">
@@ -180,6 +184,7 @@ tbody td{padding:7px 10px;color:var(--t2);white-space:nowrap}
         <button class="fb-btn type-btn" onclick="tF('day',this)">당일</button>
         <button class="fb-btn type-btn" onclick="tF('hour',this)">시간권</button>
         <button class="fb-btn type-btn" onclick="tF('month',this)">월정기</button>
+        <button class="fb-btn type-btn" onclick="tF('ev',this)">⚡ 전기차</button>
         <input class="fb-search" id="ts" placeholder="🔍 검색..." oninput="rT()">
       </div>
       <div class="sw">
@@ -259,7 +264,7 @@ function sP(k){if(pSK===k)pSA=!pSA;else{pSK=k;pSA=true;}rP();}
 function rP(){
   const s=document.getElementById('ps').value.toLowerCase();
   const md=+document.getElementById('pd').value;
-  let d=gL().filter(l=>{if(l.dist>md)return false;if(l.p30==null&&l.p60==null&&l.p120==null&&l.p180==null)return false;if(pFlt==='partner'&&!l.partner)return false;if(pFlt==='cheap'&&(l.p60==null||l.p60>4000))return false;if(s&&!l.name.toLowerCase().includes(s))return false;return true;});
+  let d=gL().filter(l=>{if(l.dist>md)return false;if(l.p30==null&&l.p60==null&&l.p120==null&&l.p180==null)return false;if(pFlt==='partner'&&!l.partner)return false;if(pFlt==='cheap'&&(l.p60==null||l.p60>4000))return false;if(pFlt==='ev'&&!l.ev)return false;if(pFlt==='ev_discount'&&!l.ev_discount)return false;if(s&&!l.name.toLowerCase().includes(s))return false;return true;});
   d.sort((a,b)=>{let av=a[pSK],bv=b[pSK];if(av==null)av=99999;if(bv==null)bv=99999;if(typeof av==='string')return pSA?av.localeCompare(bv):bv.localeCompare(av);return pSA?av-bv:bv-av;});
   const km={name:0,dist:1,p30:2,p60:3,p120:4,p180:5};
   [0,1,2,3,4,5].forEach(i=>{const th=document.getElementById('ph'+i);th.className='';if(km[pSK]===i)th.className=pSA?'sa':'sd';});
@@ -267,7 +272,7 @@ function rP(){
   document.getElementById('p-st').textContent=`전체 ${gL().length}개 중 ${d.length}개`;
   const tb=document.getElementById('pb');
   if(!d.length){tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">없음</td></tr>';return;}
-  tb.innerHTML=d.map(l=>`<tr onclick="openModal('${l.name.replace(/'/g,"\'")}', ${l.dist}, ${l.partner}, ${l.p60!==null?l.p60:'null'}, ${l.seq}, ${l.lat}, ${l.lng})" style="cursor:pointer"><td class="nc">${l.name}${l.partner?' <span class="tag partner">파트너</span>':''}</td><td><span class="dist">${l.dist}m</span></td><td class="p ${pc(l.p30)}">${fp(l.p30)}</td><td class="p ${pc(l.p60)}">${fp(l.p60)}</td><td class="p ${pc(l.p120)}">${fp(l.p120)}</td><td class="p ${pc(l.p180)}">${fp(l.p180)}</td></tr>`).join('');
+  tb.innerHTML=d.map(l=>`<tr onclick="openModal('${l.name.replace(/'/g,"\'")}', ${l.dist}, ${l.partner}, ${l.p60!==null?l.p60:'null'}, ${l.seq}, ${l.lat}, ${l.lng})" style="cursor:pointer"><td class="nc">${l.name}${l.partner?' <span class="tag partner">파트너</span>':''}${l.ev?' <span class="tag ev">⚡충전</span>':''}${l.ev_discount?' <span class="tag ev-dc">⚡할인</span>':''}</td><td><span class="dist">${l.dist}m</span></td><td class="p ${pc(l.p30)}">${fp(l.p30)}</td><td class="p ${pc(l.p60)}">${fp(l.p60)}</td><td class="p ${pc(l.p120)}">${fp(l.p120)}</td><td class="p ${pc(l.p180)}">${fp(l.p180)}</td></tr>`).join('');
 }
 function tTglOpen(el){tOpenOnly=!tOpenOnly;if(tOpenOnly)el.classList.add('on');else el.classList.remove('on');rT();}
 function tF(f,el){tFlt=f;document.querySelectorAll('#tp .type-btn').forEach(b=>b.classList.remove('on'));el.classList.add('on');rT();}
@@ -275,7 +280,7 @@ function sT(k){if(tSK===k)tSA=!tSA;else{tSK=k;tSA=true;}rT();}
 function rT(){
   const s=document.getElementById('ts').value.toLowerCase();
   const md=+document.getElementById('td').value;
-  let d=gT().filter(t=>{if(t.dist>md)return false;if(tOpenOnly&&(!t.open||t.soldout))return false;if(tFlt==='night'&&!t.name.includes('심야'))return false;if(tFlt==='day'&&!t.name.includes('당일'))return false;if(tFlt==='hour'&&!/(시간|h)/i.test(t.name))return false;if(tFlt==='month'&&!t.name.includes('월'))return false;if(s&&!t.lot.toLowerCase().includes(s)&&!t.name.toLowerCase().includes(s))return false;return true;});
+  let d=gT().filter(t=>{if(t.dist>md)return false;if(tOpenOnly&&(!t.open||t.soldout))return false;if(tFlt==='night'&&!t.name.includes('심야'))return false;if(tFlt==='day'&&!t.name.includes('당일'))return false;if(tFlt==='hour'&&!/(시간|h)/i.test(t.name))return false;if(tFlt==='month'&&!t.name.includes('월'))return false;if(tFlt==='ev'&&!/전기차|ev충전|EV/i.test(t.name))return false;if(s&&!t.lot.toLowerCase().includes(s)&&!t.name.toLowerCase().includes(s))return false;return true;});
   d.sort((a,b)=>{let av=a[tSK],bv=b[tSK];if(typeof av==='string')return tSA?av.localeCompare(bv):bv.localeCompare(av);return tSA?av-bv:bv-av;});
   const km={lot:0,dist:1,name:2,price:3};
   [0,1,2,3].forEach(i=>{const th=document.getElementById('th'+i);th.className='';if(km[tSK]===i)th.className=tSA?'sa':'sd';});
@@ -366,7 +371,7 @@ function _parseRaw(raw,clat,clng,rm){
     if(cp['60']===0)continue;
     lots.push({seq:l.parkinglotSeq,name:l.name,dist:Math.round(d),partner:l.isPartner||false,
       p30:cp['30']??null,p60:cp['60']??null,p120:cp['120']??null,p180:cp['180']??null,
-      lat:l.latitude||0,lng:l.longitude||0});
+      lat:l.latitude||0,lng:l.longitude||0,ev:l.isEvCharge||false,ev_discount:l.isEvDiscount||false});
     for(const t of(l.tickets||[]))tix.push({
       seq:l.parkinglotSeq,lot:l.name,dist:Math.round(d),partner:l.isPartner||false,
       name:t.couponName||'',price:t.price||0,time:t.usingTimeLabel||'',
