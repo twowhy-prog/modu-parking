@@ -676,6 +676,7 @@ tbody td{{padding:7px 10px;color:var(--t2);white-space:nowrap}}
       <div><h1>주변 주차장 현황</h1><p>{location_name} 기준 반경 {radius}m · 모두의주차 데이터</p></div>
     </div>
     <div class="hdr-r">
+      <span style="font-size:12px;color:var(--t3);">제작 김상현</span>
       <span class="badge">{now_str}</span>
       <a href="{sheets_url}" target="_blank" class="badge sheets">📊 Sheets 이력</a>
       <span class="badge ok">최신</span>
