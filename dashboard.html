@@ -1,0 +1,953 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CPBC 평화빌딩 주차장 대시보드</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;background:#fff;color:#333;font-size:14px}
+header{background:#1F4E79;color:#fff;padding:14px 24px;display:flex;align-items:center;justify-content:space-between}
+header h1{font-size:18px;font-weight:700}
+.credit{font-size:12px;opacity:.8}
+.filter-bar{background:#F8F9FA;border-bottom:1px solid #e0e0e0;padding:10px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.filter-bar label{font-size:13px;color:#555;white-space:nowrap}
+.year-btns{display:flex;gap:4px}
+.year-btn{padding:4px 10px;border:1px solid #1F4E79;border-radius:4px;background:#fff;color:#1F4E79;cursor:pointer;font-size:12px;font-family:inherit}
+.year-btn.active{background:#1F4E79;color:#fff}
+select{padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px;font-family:inherit}
+.tabs{display:flex;border-bottom:2px solid #1F4E79;padding:0 24px;background:#fff}
+.tab{padding:10px 20px;cursor:pointer;font-size:13px;color:#666;border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap}
+.tab.active{color:#1F4E79;border-bottom-color:#1F4E79;font-weight:700}
+.tab-content{display:none;padding:20px 24px}
+.tab-content.active{display:block}
+.kpi-row{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+.kpi{background:#F8F9FA;border-radius:8px;padding:14px 18px;flex:1;min-width:160px}
+.kpi .label{font-size:11px;color:#888;margin-bottom:4px}
+.kpi .value{font-size:20px;font-weight:700;color:#1F4E79}
+.kpi .change{font-size:12px;margin-top:4px}
+.up{color:#22C55E}.down{color:#EF4444}.flat{color:#999}
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.charts-grid.cols3{grid-template-columns:1fr 1fr 1fr}
+.chart-card{background:#F8F9FA;border-radius:8px;padding:14px}
+.chart-card.full{grid-column:1/-1}
+.chart-card h3{font-size:13px;font-weight:700;color:#1F4E79;margin-bottom:10px}
+.chart-wrap{position:relative;height:220px}
+.chart-wrap.tall{height:300px}
+canvas{max-width:100%}
+.no-data{text-align:center;padding:40px;color:#999;font-size:13px}
+/* Calendar heatmap */
+.cal-header{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.cal-header select{font-size:12px}
+.calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal-day-label{text-align:center;font-size:10px;color:#888;padding:2px}
+.cal-cell{min-height:44px;border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:10px;background:#f0f0f0}
+.cal-cell.empty{background:transparent}
+.cal-cell .cal-date{font-weight:700;margin-bottom:1px}
+.cal-cell .cal-amt{color:#555}
+.cal-cell.low{background:#BAE6FD;color:#0c4a6e}
+.cal-cell.mid{background:#38BDF8;color:#fff}
+.cal-cell.high{background:#0369A1;color:#fff}
+/* Phase timeline */
+.timeline{margin-bottom:20px}
+.phase-cards{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+.phase-card{background:#F8F9FA;border-radius:8px;padding:14px;flex:1;min-width:220px;border-left:4px solid #1F4E79}
+.phase-card.current{border-left-color:#22C55E}
+.phase-card h4{font-size:12px;font-weight:700;color:#1F4E79;margin-bottom:6px}
+.phase-card .phase-date{font-size:11px;color:#888;margin-bottom:8px}
+.phase-card ul{padding-left:14px;font-size:11px;color:#555;line-height:1.6}
+.phase-card .phase-note{font-size:10px;color:#888;margin-top:6px;font-style:italic}
+.price-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+.price-table th{background:#1F4E79;color:#fff;padding:6px 8px;text-align:left}
+.price-table td{padding:5px 8px;border-bottom:1px solid #e0e0e0}
+.price-table tr:hover td{background:#f0f4fa}
+.section-title{font-size:15px;font-weight:700;color:#1F4E79;margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid #e0e0e0}
+@media(max-width:700px){
+  .charts-grid,.charts-grid.cols3{grid-template-columns:1fr}
+  .kpi{min-width:130px}
+}
+.mode-btns{display:flex;gap:4px}
+.mode-btn{padding:4px 12px;border:1px solid #1F4E79;border-radius:4px;background:#fff;color:#1F4E79;cursor:pointer;font-size:12px;font-family:inherit}
+.mode-btn.active{background:#1F4E79;color:#fff}
+input[type=date]{padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px;font-family:inherit}
+.zoom-hint{font-size:11px;color:#06B6D4;margin-left:4px}
+.sales-cat-btn{padding:3px 9px;border:2px solid;border-radius:4px;cursor:pointer;font-size:11px;font-family:inherit;transition:background .15s,color .15s}
+</style>
+</head>
+<body>
+<header>
+  <h1>CPBC 평화빌딩 주차장 대시보드</h1>
+  <span class="credit">제작 김상현</span>
+</header>
+
+<div class="filter-bar">
+  <label>분석단위:</label>
+  <div class="mode-btns">
+    <button class="mode-btn active" data-mode="month">월단위</button>
+    <button class="mode-btn" data-mode="day">일단위</button>
+  </div>
+  <div id="monthly-filters" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+    <label>연도:</label>
+    <div class="year-btns">
+      <button class="year-btn active" data-year="all">전체</button>
+      <button class="year-btn" data-year="2023">2023</button>
+      <button class="year-btn" data-year="2024">2024</button>
+      <button class="year-btn" data-year="2025">2025</button>
+      <button class="year-btn" data-year="2026">2026</button>
+    </div>
+    <label>시작월:</label>
+    <select id="startMonth"></select>
+    <label>종료월:</label>
+    <select id="endMonth"></select>
+  </div>
+  <div id="daily-filters" style="display:none;align-items:center;gap:16px;flex-wrap:wrap">
+    <label>시작일:</label>
+    <input type="date" id="startDate" value="2025-08-04" min="2023-01-01" max="2026-05-06">
+    <label>종료일:</label>
+    <input type="date" id="endDate" value="2026-05-06" min="2023-01-01" max="2026-05-06">
+    <span class="zoom-hint">💡 차트에서 마우스 휠로 줌, 드래그로 이동</span>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="sales">① 매출 요약</div>
+  <div class="tab" data-tab="inout">② 입출차 현황</div>
+  <div class="tab" data-tab="modu">③ 모두의주차 분석</div>
+  <div class="tab" data-tab="cross">④ 통합 교차 분석</div>
+</div>
+
+<!-- ① 매출 요약 -->
+<div id="tab-sales" class="tab-content active">
+  <div class="kpi-row" id="kpi-sales"></div>
+  <div class="charts-grid">
+    <div class="chart-card full">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+        <h3 id="sales-line-title" style="margin:0">월별 전체 매출 (연도별)</h3>
+        <div class="mode-btns">
+          <button class="mode-btn active sales-view-btn" data-sview="year">연도별 합계</button>
+          <button class="mode-btn sales-view-btn" data-sview="breakdown">항목별 추이</button>
+        </div>
+      </div>
+      <div id="sales-cat-wrap" style="display:none;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px">
+        <button id="sales-cat-all" style="padding:3px 10px;border:1px solid #1F4E79;border-radius:4px;background:#1F4E79;color:#fff;cursor:pointer;font-size:11px;font-family:inherit">전체</button>
+        <button class="sales-cat-btn" data-cat="입주사"   style="border-color:#3B82F6;background:#3B82F6;color:#fff">입주사</button>
+        <button class="sales-cat-btn" data-cat="직원정기"  style="border-color:#22C55E;background:#22C55E;color:#fff">직원정기</button>
+        <button class="sales-cat-btn" data-cat="직원일일"  style="border-color:#86EFAC;background:#86EFAC;color:#333">직원일일</button>
+        <button class="sales-cat-btn" data-cat="관리실정기" style="border-color:#EAB308;background:#EAB308;color:#333">관리실정기</button>
+        <button class="sales-cat-btn" data-cat="관리실일일" style="border-color:#F59E0B;background:#F59E0B;color:#fff">관리실일일</button>
+        <button class="sales-cat-btn" data-cat="일반정기"  style="border-color:#EC4899;background:#EC4899;color:#fff">일반정기</button>
+        <button class="sales-cat-btn" data-cat="일일매출"  style="border-color:#8B5CF6;background:#8B5CF6;color:#fff">일일매출</button>
+        <button class="sales-cat-btn" data-cat="모두의주차" style="border-color:#06B6D4;background:#06B6D4;color:#fff">모두의주차</button>
+      </div>
+      <div class="chart-wrap tall"><canvas id="chart-sales-line"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>매출 구성비 (기간 합산)</h3>
+      <div class="chart-wrap"><canvas id="chart-sales-donut"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>구분별 누적 스택 바</h3>
+      <div class="chart-wrap"><canvas id="chart-sales-stack"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- ② 입출차 현황 -->
+<div id="tab-inout" class="tab-content">
+  <div class="kpi-row" id="kpi-inout"></div>
+  <div class="charts-grid">
+    <div class="chart-card full">
+      <h3>월별 입출차 건수 (유료/현장미결제)</h3>
+      <div class="chart-wrap tall"><canvas id="chart-inout-monthly"></canvas></div>
+      <p style="font-size:11px;color:#888;margin-top:6px">※ 현장미결제: 입출차 시스템에서 현장 결제가 없었던 건수. 정기권(월정액 선납) 이용자 포함이므로 실제 무료 주차와 다름.</p>
+    </div>
+    <div class="chart-card">
+      <h3>요일별 평균 입출차</h3>
+      <div class="chart-wrap"><canvas id="chart-inout-weekday"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>시간대별 분포</h3>
+      <div class="chart-wrap"><canvas id="chart-inout-hourly"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- ③ 모두의주차 -->
+<div id="tab-modu" class="tab-content">
+  <div id="modu-nodata" class="no-data" style="display:none">해당 기간 모두의주차 데이터가 없습니다. (2025-08 이후 데이터만 존재)</div>
+  <div id="modu-main">
+    <div class="kpi-row" id="kpi-modu"></div>
+    <div class="charts-grid">
+      <div class="chart-card full">
+        <h3>월별 판매금액 vs 정산금액</h3>
+        <div class="chart-wrap tall"><canvas id="chart-modu-trend"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>상품별 구성 (전체 누적)</h3>
+        <div class="chart-wrap"><canvas id="chart-modu-product"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="cal-header">
+          <h3 style="margin:0">일별 매출 달력 히트맵</h3>
+          <select id="cal-month-sel"></select>
+        </div>
+        <div class="calendar" id="modu-calendar"></div>
+      </div>
+    </div>
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h3>일반 일일매출 vs 모두의주차 (2025-07~)</h3>
+        <div class="chart-wrap"><canvas id="chart-modu-compare"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>전체 매출 내 모두의주차 비중 (%)</h3>
+        <div class="chart-wrap"><canvas id="chart-modu-share"></canvas></div>
+      </div>
+    </div>
+    <div class="section-title">요금정책 변경이력</div>
+    <div class="phase-cards" id="phase-cards"></div>
+    <div class="chart-card" style="margin-bottom:20px">
+      <h3>현행 요금표 (2026-04-24 기준)</h3>
+      <table class="price-table" id="price-table">
+        <thead><tr><th>상품명</th><th>가격</th><th>일일한도</th><th>이용시간</th><th>비고</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ④ 통합 교차 분석 -->
+<div id="tab-cross" class="tab-content">
+  <div class="charts-grid">
+    <div class="chart-card full">
+      <h3>일일매출 vs 현장결제 대조 (월별)</h3>
+      <div class="chart-wrap tall"><canvas id="chart-cross-cashvssales"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>건당 평균 결제액 추이</h3>
+      <div class="chart-wrap"><canvas id="chart-cross-avg"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>정기 매출 안정성 (입주사+직원정기+일반정기)</h3>
+      <div class="chart-wrap"><canvas id="chart-cross-regular"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DATA = {"meta":{"generated":"2026-05-07 02:17","period":"2023-01 ~ 2026-04","total_inout":76262,"note":"모두의주차는 CSV 결제완료 기준(취소 반영). 관리실정기/일일은 매출파일 기준만 존재."},"sales_monthly":[{"year":2023,"month":1,"ym":"2023-01","입주사":678000,"직원정기":1520000,"직원일일":70000,"관리실정기":50000,"관리실일일":20000,"일반정기":2000000,"일일매출":6033000,"모두의주차":0,"total":10371000},{"year":2023,"month":2,"ym":"2023-02","입주사":678000,"직원정기":1520000,"직원일일":160000,"관리실정기":50000,"관리실일일":10000,"일반정기":2000000,"일일매출":5772000,"모두의주차":0,"total":10190000},{"year":2023,"month":3,"ym":"2023-03","입주사":1078000,"직원정기":1360000,"직원일일":90000,"관리실정기":50000,"관리실일일":0,"일반정기":2000000,"일일매출":6334000,"모두의주차":0,"total":10912000},{"year":2023,"month":4,"ym":"2023-04","입주사":678000,"직원정기":1280000,"직원일일":30000,"관리실정기":50000,"관리실일일":20000,"일반정기":2000000,"일일매출":6433000,"모두의주차":0,"total":10491000},{"year":2023,"month":5,"ym":"2023-05","입주사":678000,"직원정기":1120000,"직원일일":90000,"관리실정기":50000,"관리실일일":40000,"일반정기":2400000,"일일매출":5247000,"모두의주차":0,"total":9625000},{"year":2023,"month":6,"ym":"2023-06","입주사":678000,"직원정기":1120000,"직원일일":140000,"관리실정기":50000,"관리실일일":30000,"일반정기":2250000,"일일매출":5099000,"모두의주차":0,"total":9367000},{"year":2023,"month":7,"ym":"2023-07","입주사":678000,"직원정기":1120000,"직원일일":130000,"관리실정기":50000,"관리실일일":10000,"일반정기":2816000,"일일매출":5655000,"모두의주차":0,"total":10459000},{"year":2023,"month":8,"ym":"2023-08","입주사":678000,"직원정기":1120000,"직원일일":150000,"관리실정기":50000,"관리실일일":30000,"일반정기":2341000,"일일매출":5281000,"모두의주차":0,"total":9650000},{"year":2023,"month":9,"ym":"2023-09","입주사":810000,"직원정기":1120000,"직원일일":60000,"관리실정기":50000,"관리실일일":0,"일반정기":2500000,"일일매출":4405000,"모두의주차":0,"total":8945000},{"year":2023,"month":10,"ym":"2023-10","입주사":810000,"직원정기":960000,"직원일일":80000,"관리실정기":50000,"관리실일일":50000,"일반정기":2520000,"일일매출":4333000,"모두의주차":0,"total":8803000},{"year":2023,"month":11,"ym":"2023-11","입주사":1310000,"직원정기":960000,"직원일일":170000,"관리실정기":50000,"관리실일일":30000,"일반정기":2000000,"일일매출":3827000,"모두의주차":0,"total":8347000},{"year":2023,"month":12,"ym":"2023-12","입주사":810000,"직원정기":960000,"직원일일":150000,"관리실정기":50000,"관리실일일":30000,"일반정기":3587000,"일일매출":4878000,"모두의주차":0,"total":10465000},{"year":2024,"month":1,"ym":"2024-01","입주사":1410000,"직원정기":960000,"직원일일":160000,"관리실정기":50000,"관리실일일":0,"일반정기":5950000,"일일매출":3187000,"모두의주차":0,"total":11717000},{"year":2024,"month":2,"ym":"2024-02","입주사":810000,"직원정기":960000,"직원일일":150000,"관리실정기":50000,"관리실일일":10000,"일반정기":5950000,"일일매출":3181000,"모두의주차":0,"total":11111000},{"year":2024,"month":3,"ym":"2024-03","입주사":810000,"직원정기":880000,"직원일일":30000,"관리실정기":100000,"관리실일일":20000,"일반정기":4484000,"일일매출":3745010,"모두의주차":0,"total":10069010},{"year":2024,"month":4,"ym":"2024-04","입주사":1242000,"직원정기":720000,"직원일일":130000,"관리실정기":50000,"관리실일일":0,"일반정기":5600000,"일일매출":3752000,"모두의주차":0,"total":11494000},{"year":2024,"month":5,"ym":"2024-05","입주사":942000,"직원정기":800000,"직원일일":100000,"관리실정기":50000,"관리실일일":0,"일반정기":5500000,"일일매출":3090000,"모두의주차":0,"total":10482000},{"year":2024,"month":6,"ym":"2024-06","입주사":810000,"직원정기":640000,"직원일일":140000,"관리실정기":50000,"관리실일일":0,"일반정기":5500000,"일일매출":3641000,"모두의주차":0,"total":10781000},{"year":2024,"month":7,"ym":"2024-07","입주사":1110000,"직원정기":720000,"직원일일":240000,"관리실정기":50000,"관리실일일":10000,"일반정기":5750000,"일일매출":3731000,"모두의주차":0,"total":11611000},{"year":2024,"month":8,"ym":"2024-08","입주사":810000,"직원정기":640000,"직원일일":150000,"관리실정기":50000,"관리실일일":10000,"일반정기":6450000,"일일매출":3890000,"모두의주차":0,"total":12000000},{"year":2024,"month":9,"ym":"2024-09","입주사":810000,"직원정기":640000,"직원일일":150000,"관리실정기":50000,"관리실일일":10000,"일반정기":6750000,"일일매출":4158000,"모두의주차":0,"total":12568000},{"year":2024,"month":10,"ym":"2024-10","입주사":810000,"직원정기":880000,"직원일일":160000,"관리실정기":50000,"관리실일일":10000,"일반정기":6600000,"일일매출":5098000,"모두의주차":0,"total":13608000},{"year":2024,"month":11,"ym":"2024-11","입주사":810000,"직원정기":640000,"직원일일":240000,"관리실정기":50000,"관리실일일":20000,"일반정기":6680000,"일일매출":3413000,"모두의주차":0,"total":11853000},{"year":2024,"month":12,"ym":"2024-12","입주사":1110000,"직원정기":1040000,"직원일일":220000,"관리실정기":100000,"관리실일일":10000,"일반정기":6540000,"일일매출":5367000,"모두의주차":0,"total":14387000},{"year":2025,"month":1,"ym":"2025-01","입주사":810000,"직원정기":800000,"직원일일":250000,"관리실정기":100000,"관리실일일":10000,"일반정기":5750000,"일일매출":2969000,"모두의주차":0,"total":10689000},{"year":2025,"month":2,"ym":"2025-02","입주사":942000,"직원정기":800000,"직원일일":220000,"관리실정기":100000,"관리실일일":0,"일반정기":6150000,"일일매출":3189000,"모두의주차":0,"total":11401000},{"year":2025,"month":3,"ym":"2025-03","입주사":810000,"직원정기":880000,"직원일일":210000,"관리실정기":50000,"관리실일일":10000,"일반정기":5750000,"일일매출":3980000,"모두의주차":0,"total":11690000},{"year":2025,"month":4,"ym":"2025-04","입주사":992000,"직원정기":960000,"직원일일":110000,"관리실정기":50000,"관리실일일":0,"일반정기":5500000,"일일매출":4317000,"모두의주차":0,"total":11929000},{"year":2025,"month":5,"ym":"2025-05","입주사":660000,"직원정기":880000,"직원일일":180000,"관리실정기":50000,"관리실일일":0,"일반정기":5900000,"일일매출":4021000,"모두의주차":0,"total":11691000},{"year":2025,"month":6,"ym":"2025-06","입주사":1060000,"직원정기":800000,"직원일일":240000,"관리실정기":50000,"관리실일일":10000,"일반정기":5500000,"일일매출":3650000,"모두의주차":0,"total":11310000},{"year":2025,"month":7,"ym":"2025-07","입주사":992000,"직원정기":960000,"직원일일":180000,"관리실정기":50000,"관리실일일":0,"일반정기":1900000,"일일매출":4454000,"모두의주차":0,"total":8536000},{"year":2025,"month":8,"ym":"2025-08","입주사":660000,"직원정기":1120000,"직원일일":140000,"관리실정기":50000,"관리실일일":0,"일반정기":2167000,"일일매출":4155000,"모두의주차":2592000,"total":10884000},{"year":2025,"month":9,"ym":"2025-09","입주사":860000,"직원정기":1040000,"직원일일":90000,"관리실정기":50000,"관리실일일":0,"일반정기":2400000,"일일매출":5215000,"모두의주차":4509000,"total":14164000},{"year":2025,"month":10,"ym":"2025-10","입주사":860000,"직원정기":720000,"직원일일":230000,"관리실정기":0,"관리실일일":0,"일반정기":1250000,"일일매출":3801000,"모두의주차":3441000,"total":10302000},{"year":2025,"month":11,"ym":"2025-11","입주사":860000,"직원정기":753000,"직원일일":110000,"관리실정기":0,"관리실일일":0,"일반정기":1460000,"일일매출":4267000,"모두의주차":4461000,"total":11911000},{"year":2025,"month":12,"ym":"2025-12","입주사":960000,"직원정기":640000,"직원일일":110000,"관리실정기":0,"관리실일일":0,"일반정기":1650000,"일일매출":6098000,"모두의주차":4754000,"total":14212000},{"year":2026,"month":1,"ym":"2026-01","입주사":860000,"직원정기":720000,"직원일일":160000,"관리실정기":80000,"관리실일일":0,"일반정기":1700000,"일일매출":5846000,"모두의주차":4974000,"total":14340000},{"year":2026,"month":2,"ym":"2026-02","입주사":992000,"직원정기":560000,"직원일일":150000,"관리실정기":80000,"관리실일일":0,"일반정기":1750000,"일일매출":4198000,"모두의주차":4875000,"total":12605000},{"year":2026,"month":3,"ym":"2026-03","입주사":660000,"직원정기":640000,"직원일일":80000,"관리실정기":80000,"관리실일일":0,"일반정기":2283000,"일일매출":4834000,"모두의주차":5583000,"total":14160000},{"year":2026,"month":4,"ym":"2026-04","입주사":992000,"직원정기":640000,"직원일일":100000,"관리실정기":80000,"관리실일일":0,"일반정기":2833330,"일일매출":6086000,"모두의주차":5775000,"total":16506330}],"inout_monthly":[{"year":2023,"month":1,"ym":"2023-01","total_cnt":2042,"paid_cnt":725,"free_cnt":1317,"cash_amt":5848000,"modu_cnt":0},{"year":2023,"month":2,"ym":"2023-02","total_cnt":1879,"paid_cnt":692,"free_cnt":1187,"cash_amt":5642000,"modu_cnt":0},{"year":2023,"month":3,"ym":"2023-03","total_cnt":2106,"paid_cnt":745,"free_cnt":1361,"cash_amt":6249000,"modu_cnt":0},{"year":2023,"month":4,"ym":"2023-04","total_cnt":2009,"paid_cnt":740,"free_cnt":1269,"cash_amt":6313000,"modu_cnt":0},{"year":2023,"month":5,"ym":"2023-05","total_cnt":1856,"paid_cnt":652,"free_cnt":1204,"cash_amt":5158000,"modu_cnt":0},{"year":2023,"month":6,"ym":"2023-06","total_cnt":1846,"paid_cnt":615,"free_cnt":1231,"cash_amt":5020000,"modu_cnt":0},{"year":2023,"month":7,"ym":"2023-07","total_cnt":2004,"paid_cnt":645,"free_cnt":1359,"cash_amt":5439000,"modu_cnt":0},{"year":2023,"month":8,"ym":"2023-08","total_cnt":2032,"paid_cnt":673,"free_cnt":1359,"cash_amt":5239000,"modu_cnt":0},{"year":2023,"month":9,"ym":"2023-09","total_cnt":1593,"paid_cnt":450,"free_cnt":1143,"cash_amt":4347000,"modu_cnt":0},{"year":2023,"month":10,"ym":"2023-10","total_cnt":1658,"paid_cnt":451,"free_cnt":1207,"cash_amt":4102000,"modu_cnt":0},{"year":2023,"month":11,"ym":"2023-11","total_cnt":1721,"paid_cnt":396,"free_cnt":1325,"cash_amt":3525000,"modu_cnt":0},{"year":2023,"month":12,"ym":"2023-12","total_cnt":1810,"paid_cnt":508,"free_cnt":1302,"cash_amt":4869000,"modu_cnt":0},{"year":2024,"month":1,"ym":"2024-01","total_cnt":1759,"paid_cnt":377,"free_cnt":1382,"cash_amt":3158000,"modu_cnt":0},{"year":2024,"month":2,"ym":"2024-02","total_cnt":1634,"paid_cnt":353,"free_cnt":1281,"cash_amt":3142000,"modu_cnt":0},{"year":2024,"month":3,"ym":"2024-03","total_cnt":1639,"paid_cnt":389,"free_cnt":1250,"cash_amt":3676000,"modu_cnt":0},{"year":2024,"month":4,"ym":"2024-04","total_cnt":1576,"paid_cnt":355,"free_cnt":1221,"cash_amt":3515000,"modu_cnt":0},{"year":2024,"month":5,"ym":"2024-05","total_cnt":1579,"paid_cnt":344,"free_cnt":1235,"cash_amt":3048000,"modu_cnt":0},{"year":2024,"month":6,"ym":"2024-06","total_cnt":1563,"paid_cnt":351,"free_cnt":1212,"cash_amt":3265000,"modu_cnt":0},{"year":2024,"month":7,"ym":"2024-07","total_cnt":1834,"paid_cnt":344,"free_cnt":1490,"cash_amt":3043000,"modu_cnt":0},{"year":2024,"month":8,"ym":"2024-08","total_cnt":1776,"paid_cnt":336,"free_cnt":1440,"cash_amt":3207000,"modu_cnt":0},{"year":2024,"month":9,"ym":"2024-09","total_cnt":1641,"paid_cnt":357,"free_cnt":1284,"cash_amt":3655000,"modu_cnt":0},{"year":2024,"month":10,"ym":"2024-10","total_cnt":1926,"paid_cnt":418,"free_cnt":1508,"cash_amt":4181000,"modu_cnt":0},{"year":2024,"month":11,"ym":"2024-11","total_cnt":1793,"paid_cnt":378,"free_cnt":1415,"cash_amt":3276000,"modu_cnt":0},{"year":2024,"month":12,"ym":"2024-12","total_cnt":2103,"paid_cnt":527,"free_cnt":1576,"cash_amt":4711000,"modu_cnt":0},{"year":2025,"month":1,"ym":"2025-01","total_cnt":1497,"paid_cnt":306,"free_cnt":1191,"cash_amt":2831000,"modu_cnt":0},{"year":2025,"month":2,"ym":"2025-02","total_cnt":1676,"paid_cnt":309,"free_cnt":1367,"cash_amt":2901000,"modu_cnt":0},{"year":2025,"month":3,"ym":"2025-03","total_cnt":1825,"paid_cnt":371,"free_cnt":1454,"cash_amt":3367000,"modu_cnt":0},{"year":2025,"month":4,"ym":"2025-04","total_cnt":1997,"paid_cnt":401,"free_cnt":1596,"cash_amt":3884000,"modu_cnt":0},{"year":2025,"month":5,"ym":"2025-05","total_cnt":1905,"paid_cnt":373,"free_cnt":1532,"cash_amt":3574000,"modu_cnt":0},{"year":2025,"month":6,"ym":"2025-06","total_cnt":1710,"paid_cnt":360,"free_cnt":1350,"cash_amt":3351000,"modu_cnt":0},{"year":2025,"month":7,"ym":"2025-07","total_cnt":1841,"paid_cnt":387,"free_cnt":1454,"cash_amt":3897000,"modu_cnt":2},{"year":2025,"month":8,"ym":"2025-08","total_cnt":2150,"paid_cnt":417,"free_cnt":1733,"cash_amt":3789000,"modu_cnt":312},{"year":2025,"month":9,"ym":"2025-09","total_cnt":2426,"paid_cnt":459,"free_cnt":1967,"cash_amt":4720000,"modu_cnt":425},{"year":2025,"month":10,"ym":"2025-10","total_cnt":1847,"paid_cnt":366,"free_cnt":1481,"cash_amt":3786000,"modu_cnt":376},{"year":2025,"month":11,"ym":"2025-11","total_cnt":2103,"paid_cnt":421,"free_cnt":1682,"cash_amt":3923000,"modu_cnt":477},{"year":2025,"month":12,"ym":"2025-12","total_cnt":2427,"paid_cnt":537,"free_cnt":1890,"cash_amt":5733000,"modu_cnt":494},{"year":2026,"month":1,"ym":"2026-01","total_cnt":2349,"paid_cnt":535,"free_cnt":1814,"cash_amt":5643000,"modu_cnt":499},{"year":2026,"month":2,"ym":"2026-02","total_cnt":2080,"paid_cnt":398,"free_cnt":1682,"cash_amt":3956000,"modu_cnt":502},{"year":2026,"month":3,"ym":"2026-03","total_cnt":2226,"paid_cnt":465,"free_cnt":1761,"cash_amt":4366000,"modu_cnt":543},{"year":2026,"month":4,"ym":"2026-04","total_cnt":2352,"paid_cnt":505,"free_cnt":1847,"cash_amt":5273000,"modu_cnt":578},{"year":2026,"month":5,"ym":"2026-05","total_cnt":472,"paid_cnt":102,"free_cnt":370,"cash_amt":1168000,"modu_cnt":172}],"weekday":[{"day":"월","cnt":11741,"paid":1970,"amt":16014000},{"day":"화","cnt":12608,"paid":2203,"amt":19059000},{"day":"수","cnt":12594,"paid":2333,"amt":18754000},{"day":"목","cnt":12157,"paid":2147,"amt":18107000},{"day":"금","cnt":11231,"paid":2117,"amt":18159000},{"day":"토","cnt":6736,"paid":1544,"amt":15801000},{"day":"일","cnt":9195,"paid":6219,"amt":63896000}],"hourly":[{"hour":0,"cnt":50,"paid":9,"amt":260000},{"hour":1,"cnt":33,"paid":10,"amt":54000},{"hour":2,"cnt":12,"paid":3,"amt":46000},{"hour":3,"cnt":38,"paid":5,"amt":44000},{"hour":4,"cnt":106,"paid":6,"amt":116000},{"hour":5,"cnt":1304,"paid":25,"amt":464000},{"hour":6,"cnt":5099,"paid":362,"amt":3941000},{"hour":7,"cnt":3372,"paid":248,"amt":3891000},{"hour":8,"cnt":6607,"paid":420,"amt":6026000},{"hour":9,"cnt":8805,"paid":2423,"amt":23415000},{"hour":10,"cnt":6816,"paid":1680,"amt":14654000},{"hour":11,"cnt":8232,"paid":3194,"amt":28940000},{"hour":12,"cnt":5853,"paid":1706,"amt":14746000},{"hour":13,"cnt":5579,"paid":2027,"amt":16662000},{"hour":14,"cnt":5453,"paid":1832,"amt":14398000},{"hour":15,"cnt":4443,"paid":1274,"amt":9699000},{"hour":16,"cnt":4198,"paid":1038,"amt":9000000},{"hour":17,"cnt":4164,"paid":704,"amt":7358000},{"hour":18,"cnt":2657,"paid":643,"amt":7272000},{"hour":19,"cnt":1514,"paid":441,"amt":4519000},{"hour":20,"cnt":1038,"paid":242,"amt":2180000},{"hour":21,"cnt":502,"paid":144,"amt":1210000},{"hour":22,"cnt":290,"paid":74,"amt":638000},{"hour":23,"cnt":97,"paid":23,"amt":257000}],"modu_daily":[{"year":2025,"month":8,"date":"2025-08-04","day":"월","cnt":2,"sales":14000,"settle":12600},{"year":2025,"month":8,"date":"2025-08-05","day":"화","cnt":4,"sales":34000,"settle":30600},{"year":2025,"month":8,"date":"2025-08-06","day":"수","cnt":1,"sales":7000,"settle":6300},{"year":2025,"month":8,"date":"2025-08-07","day":"목","cnt":14,"sales":113000,"settle":101700},{"year":2025,"month":8,"date":"2025-08-08","day":"금","cnt":11,"sales":106000,"settle":95400},{"year":2025,"month":8,"date":"2025-08-09","day":"토","cnt":29,"sales":192000,"settle":172800},{"year":2025,"month":8,"date":"2025-08-10","day":"일","cnt":8,"sales":56000,"settle":50400},{"year":2025,"month":8,"date":"2025-08-11","day":"월","cnt":4,"sales":44000,"settle":39600},{"year":2025,"month":8,"date":"2025-08-12","day":"화","cnt":8,"sales":94000,"settle":84600},{"year":2025,"month":8,"date":"2025-08-13","day":"수","cnt":7,"sales":68000,"settle":61200},{"year":2025,"month":8,"date":"2025-08-14","day":"목","cnt":5,"sales":41000,"settle":36900},{"year":2025,"month":8,"date":"2025-08-15","day":"금","cnt":10,"sales":70000,"settle":63000},{"year":2025,"month":8,"date":"2025-08-16","day":"토","cnt":29,"sales":192000,"settle":172800},{"year":2025,"month":8,"date":"2025-08-17","day":"일","cnt":11,"sales":80000,"settle":72000},{"year":2025,"month":8,"date":"2025-08-18","day":"월","cnt":9,"sales":108000,"settle":97200},{"year":2025,"month":8,"date":"2025-08-19","day":"화","cnt":5,"sales":51000,"settle":45900},{"year":2025,"month":8,"date":"2025-08-20","day":"수","cnt":7,"sales":55000,"settle":49500},{"year":2025,"month":8,"date":"2025-08-21","day":"목","cnt":8,"sales":59000,"settle":53100},{"year":2025,"month":8,"date":"2025-08-22","day":"금","cnt":10,"sales":108000,"settle":97200},{"year":2025,"month":8,"date":"2025-08-23","day":"토","cnt":32,"sales":232000,"settle":208800},{"year":2025,"month":8,"date":"2025-08-24","day":"일","cnt":10,"sales":70000,"settle":63000},{"year":2025,"month":8,"date":"2025-08-25","day":"월","cnt":6,"sales":48000,"settle":43200},{"year":2025,"month":8,"date":"2025-08-26","day":"화","cnt":8,"sales":75000,"settle":67500},{"year":2025,"month":8,"date":"2025-08-27","day":"수","cnt":13,"sales":129000,"settle":116100},{"year":2025,"month":8,"date":"2025-08-28","day":"목","cnt":9,"sales":91000,"settle":81900},{"year":2025,"month":8,"date":"2025-08-29","day":"금","cnt":16,"sales":162000,"settle":145800},{"year":2025,"month":8,"date":"2025-08-30","day":"토","cnt":35,"sales":258000,"settle":232200},{"year":2025,"month":8,"date":"2025-08-31","day":"일","cnt":5,"sales":35000,"settle":31500},{"year":2025,"month":9,"date":"2025-09-01","day":"월","cnt":8,"sales":117000,"settle":105300},{"year":2025,"month":9,"date":"2025-09-02","day":"화","cnt":6,"sales":58000,"settle":52200},{"year":2025,"month":9,"date":"2025-09-03","day":"수","cnt":10,"sales":92000,"settle":82800},{"year":2025,"month":9,"date":"2025-09-04","day":"목","cnt":12,"sales":129000,"settle":116100},{"year":2025,"month":9,"date":"2025-09-05","day":"금","cnt":11,"sales":129000,"settle":116100},{"year":2025,"month":9,"date":"2025-09-06","day":"토","cnt":34,"sales":245000,"settle":220500},{"year":2025,"month":9,"date":"2025-09-07","day":"일","cnt":6,"sales":45000,"settle":40500},{"year":2025,"month":9,"date":"2025-09-08","day":"월","cnt":19,"sales":248000,"settle":223200},{"year":2025,"month":9,"date":"2025-09-09","day":"화","cnt":17,"sales":251000,"settle":225900},{"year":2025,"month":9,"date":"2025-09-10","day":"수","cnt":15,"sales":215000,"settle":193500},{"year":2025,"month":9,"date":"2025-09-11","day":"목","cnt":12,"sales":99000,"settle":89100},{"year":2025,"month":9,"date":"2025-09-12","day":"금","cnt":9,"sales":121000,"settle":108900},{"year":2025,"month":9,"date":"2025-09-13","day":"토","cnt":43,"sales":317000,"settle":285300},{"year":2025,"month":9,"date":"2025-09-14","day":"일","cnt":7,"sales":49000,"settle":44100},{"year":2025,"month":9,"date":"2025-09-15","day":"월","cnt":6,"sales":120000,"settle":108000},{"year":2025,"month":9,"date":"2025-09-16","day":"화","cnt":6,"sales":71000,"settle":63900},{"year":2025,"month":9,"date":"2025-09-17","day":"수","cnt":6,"sales":107000,"settle":96300},{"year":2025,"month":9,"date":"2025-09-18","day":"목","cnt":14,"sales":126000,"settle":113400},{"year":2025,"month":9,"date":"2025-09-19","day":"금","cnt":5,"sales":70000,"settle":63000},{"year":2025,"month":9,"date":"2025-09-20","day":"토","cnt":36,"sales":260000,"settle":234000},{"year":2025,"month":9,"date":"2025-09-21","day":"일","cnt":5,"sales":35000,"settle":31500},{"year":2025,"month":9,"date":"2025-09-22","day":"월","cnt":13,"sales":168000,"settle":151200},{"year":2025,"month":9,"date":"2025-09-23","day":"화","cnt":20,"sales":285000,"settle":256500},{"year":2025,"month":9,"date":"2025-09-24","day":"수","cnt":15,"sales":195000,"settle":175500},{"year":2025,"month":9,"date":"2025-09-25","day":"목","cnt":22,"sales":299000,"settle":269100},{"year":2025,"month":9,"date":"2025-09-26","day":"금","cnt":14,"sales":145000,"settle":130500},{"year":2025,"month":9,"date":"2025-09-27","day":"토","cnt":32,"sales":241000,"settle":216900},{"year":2025,"month":9,"date":"2025-09-28","day":"일","cnt":5,"sales":35000,"settle":31500},{"year":2025,"month":9,"date":"2025-09-29","day":"월","cnt":10,"sales":105000,"settle":94500},{"year":2025,"month":9,"date":"2025-09-30","day":"화","cnt":11,"sales":132000,"settle":118800},{"year":2025,"month":10,"date":"2025-10-01","day":"수","cnt":10,"sales":125000,"settle":112500},{"year":2025,"month":10,"date":"2025-10-02","day":"목","cnt":20,"sales":229000,"settle":206100},{"year":2025,"month":10,"date":"2025-10-03","day":"금","cnt":11,"sales":80000,"settle":72000},{"year":2025,"month":10,"date":"2025-10-04","day":"토","cnt":1,"sales":6000,"settle":5400},{"year":2025,"month":10,"date":"2025-10-05","day":"일","cnt":7,"sales":49000,"settle":44100},{"year":2025,"month":10,"date":"2025-10-06","day":"월","cnt":5,"sales":30000,"settle":27000},{"year":2025,"month":10,"date":"2025-10-07","day":"화","cnt":20,"sales":141000,"settle":126900},{"year":2025,"month":10,"date":"2025-10-08","day":"수","cnt":31,"sales":248000,"settle":223200},{"year":2025,"month":10,"date":"2025-10-09","day":"목","cnt":12,"sales":93000,"settle":83700},{"year":2025,"month":10,"date":"2025-10-10","day":"금","cnt":6,"sales":87000,"settle":78300},{"year":2025,"month":10,"date":"2025-10-11","day":"토","cnt":30,"sales":214000,"settle":192600},{"year":2025,"month":10,"date":"2025-10-12","day":"일","cnt":6,"sales":42000,"settle":37800},{"year":2025,"month":10,"date":"2025-10-13","day":"월","cnt":4,"sales":57000,"settle":51300},{"year":2025,"month":10,"date":"2025-10-14","day":"화","cnt":9,"sales":95000,"settle":85500},{"year":2025,"month":10,"date":"2025-10-15","day":"수","cnt":15,"sales":140000,"settle":126000},{"year":2025,"month":10,"date":"2025-10-16","day":"목","cnt":15,"sales":127000,"settle":114300},{"year":2025,"month":10,"date":"2025-10-17","day":"금","cnt":12,"sales":114000,"settle":102600},{"year":2025,"month":10,"date":"2025-10-18","day":"토","cnt":33,"sales":220000,"settle":198000},{"year":2025,"month":10,"date":"2025-10-19","day":"일","cnt":11,"sales":80000,"settle":72000},{"year":2025,"month":10,"date":"2025-10-20","day":"월","cnt":16,"sales":208000,"settle":187200},{"year":2025,"month":10,"date":"2025-10-21","day":"화","cnt":11,"sales":118000,"settle":106200},{"year":2025,"month":10,"date":"2025-10-22","day":"수","cnt":9,"sales":95000,"settle":85500},{"year":2025,"month":10,"date":"2025-10-23","day":"목","cnt":17,"sales":173000,"settle":155700},{"year":2025,"month":10,"date":"2025-10-26","day":"일","cnt":4,"sales":31000,"settle":27900},{"year":2025,"month":10,"date":"2025-10-27","day":"월","cnt":10,"sales":91000,"settle":81900},{"year":2025,"month":10,"date":"2025-10-28","day":"화","cnt":9,"sales":78000,"settle":70200},{"year":2025,"month":10,"date":"2025-10-29","day":"수","cnt":8,"sales":91000,"settle":81900},{"year":2025,"month":10,"date":"2025-10-30","day":"목","cnt":14,"sales":158000,"settle":142200},{"year":2025,"month":10,"date":"2025-10-31","day":"금","cnt":24,"sales":221000,"settle":198900},{"year":2025,"month":11,"date":"2025-11-01","day":"토","cnt":34,"sales":239000,"settle":215100},{"year":2025,"month":11,"date":"2025-11-02","day":"일","cnt":3,"sales":24000,"settle":21600},{"year":2025,"month":11,"date":"2025-11-03","day":"월","cnt":10,"sales":111000,"settle":99900},{"year":2025,"month":11,"date":"2025-11-04","day":"화","cnt":18,"sales":170000,"settle":153000},{"year":2025,"month":11,"date":"2025-11-05","day":"수","cnt":12,"sales":138000,"settle":124200},{"year":2025,"month":11,"date":"2025-11-06","day":"목","cnt":13,"sales":112000,"settle":100800},{"year":2025,"month":11,"date":"2025-11-07","day":"금","cnt":23,"sales":208000,"settle":187200},{"year":2025,"month":11,"date":"2025-11-08","day":"토","cnt":29,"sales":211000,"settle":189900},{"year":2025,"month":11,"date":"2025-11-09","day":"일","cnt":4,"sales":28000,"settle":25200},{"year":2025,"month":11,"date":"2025-11-10","day":"월","cnt":12,"sales":118000,"settle":106200},{"year":2025,"month":11,"date":"2025-11-11","day":"화","cnt":11,"sales":122000,"settle":109800},{"year":2025,"month":11,"date":"2025-11-12","day":"수","cnt":14,"sales":142000,"settle":127800},{"year":2025,"month":11,"date":"2025-11-13","day":"목","cnt":13,"sales":138000,"settle":124200},{"year":2025,"month":11,"date":"2025-11-14","day":"금","cnt":18,"sales":202000,"settle":181800},{"year":2025,"month":11,"date":"2025-11-15","day":"토","cnt":31,"sales":224000,"settle":201600},{"year":2025,"month":11,"date":"2025-11-16","day":"일","cnt":4,"sales":28000,"settle":25200},{"year":2025,"month":11,"date":"2025-11-17","day":"월","cnt":12,"sales":119000,"settle":107100},{"year":2025,"month":11,"date":"2025-11-18","day":"화","cnt":14,"sales":155000,"settle":139500},{"year":2025,"month":11,"date":"2025-11-19","day":"수","cnt":16,"sales":149000,"settle":134100},{"year":2025,"month":11,"date":"2025-11-20","day":"목","cnt":9,"sales":88000,"settle":79200},{"year":2025,"month":11,"date":"2025-11-21","day":"금","cnt":14,"sales":156000,"settle":140400},{"year":2025,"month":11,"date":"2025-11-22","day":"토","cnt":49,"sales":365000,"settle":328500},{"year":2025,"month":11,"date":"2025-11-23","day":"일","cnt":4,"sales":28000,"settle":25200},{"year":2025,"month":11,"date":"2025-11-24","day":"월","cnt":14,"sales":138000,"settle":124200},{"year":2025,"month":11,"date":"2025-11-25","day":"화","cnt":18,"sales":193000,"settle":173700},{"year":2025,"month":11,"date":"2025-11-26","day":"수","cnt":13,"sales":158000,"settle":142200},{"year":2025,"month":11,"date":"2025-11-27","day":"목","cnt":10,"sales":118000,"settle":106200},{"year":2025,"month":11,"date":"2025-11-28","day":"금","cnt":32,"sales":345000,"settle":310500},{"year":2025,"month":11,"date":"2025-11-29","day":"토","cnt":28,"sales":185000,"settle":166500},{"year":2025,"month":11,"date":"2025-11-30","day":"일","cnt":7,"sales":49000,"settle":44100},{"year":2025,"month":12,"date":"2025-12-01","day":"월","cnt":8,"sales":56000,"settle":42000},{"year":2025,"month":12,"date":"2025-12-02","day":"화","cnt":9,"sales":82000,"settle":61500},{"year":2025,"month":12,"date":"2025-12-03","day":"수","cnt":10,"sales":108000,"settle":81000},{"year":2025,"month":12,"date":"2025-12-04","day":"목","cnt":9,"sales":94000,"settle":70500},{"year":2025,"month":12,"date":"2025-12-05","day":"금","cnt":5,"sales":38000,"settle":28500},{"year":2025,"month":12,"date":"2025-12-06","day":"토","cnt":38,"sales":279000,"settle":209250},{"year":2025,"month":12,"date":"2025-12-07","day":"일","cnt":4,"sales":28000,"settle":21000},{"year":2025,"month":12,"date":"2025-12-08","day":"월","cnt":9,"sales":75000,"settle":56250},{"year":2025,"month":12,"date":"2025-12-09","day":"화","cnt":9,"sales":75000,"settle":56250},{"year":2025,"month":12,"date":"2025-12-10","day":"수","cnt":21,"sales":188000,"settle":141000},{"year":2025,"month":12,"date":"2025-12-11","day":"목","cnt":18,"sales":170000,"settle":127500},{"year":2025,"month":12,"date":"2025-12-12","day":"금","cnt":19,"sales":229000,"settle":171750},{"year":2025,"month":12,"date":"2025-12-13","day":"토","cnt":25,"sales":168000,"settle":126000},{"year":2025,"month":12,"date":"2025-12-14","day":"일","cnt":8,"sales":56000,"settle":42000},{"year":2025,"month":12,"date":"2025-12-15","day":"월","cnt":15,"sales":214000,"settle":160500},{"year":2025,"month":12,"date":"2025-12-16","day":"화","cnt":17,"sales":183000,"settle":137250},{"year":2025,"month":12,"date":"2025-12-17","day":"수","cnt":18,"sales":268000,"settle":201000},{"year":2025,"month":12,"date":"2025-12-18","day":"목","cnt":15,"sales":188000,"settle":141000},{"year":2025,"month":12,"date":"2025-12-19","day":"금","cnt":24,"sales":215000,"settle":161250},{"year":2025,"month":12,"date":"2025-12-20","day":"토","cnt":50,"sales":375000,"settle":281250},{"year":2025,"month":12,"date":"2025-12-21","day":"일","cnt":13,"sales":94000,"settle":70500},{"year":2025,"month":12,"date":"2025-12-22","day":"월","cnt":18,"sales":182000,"settle":136500},{"year":2025,"month":12,"date":"2025-12-23","day":"화","cnt":16,"sales":179000,"settle":134250},{"year":2025,"month":12,"date":"2025-12-24","day":"수","cnt":10,"sales":150000,"settle":112500},{"year":2025,"month":12,"date":"2025-12-25","day":"목","cnt":1,"sales":7000,"settle":5250},{"year":2025,"month":12,"date":"2025-12-26","day":"금","cnt":12,"sales":118000,"settle":88500},{"year":2025,"month":12,"date":"2025-12-27","day":"토","cnt":41,"sales":288000,"settle":216000},{"year":2025,"month":12,"date":"2025-12-28","day":"일","cnt":6,"sales":42000,"settle":31500},{"year":2025,"month":12,"date":"2025-12-29","day":"월","cnt":12,"sales":115000,"settle":86250},{"year":2025,"month":12,"date":"2025-12-30","day":"화","cnt":17,"sales":163000,"settle":122250},{"year":2025,"month":12,"date":"2025-12-31","day":"수","cnt":28,"sales":327000,"settle":245250},{"year":2026,"month":1,"date":"2026-01-01","day":"목","cnt":28,"sales":272000,"settle":204000},{"year":2026,"month":1,"date":"2026-01-02","day":"금","cnt":14,"sales":165000,"settle":123750},{"year":2026,"month":1,"date":"2026-01-03","day":"토","cnt":38,"sales":261000,"settle":195750},{"year":2026,"month":1,"date":"2026-01-04","day":"일","cnt":5,"sales":35000,"settle":26250},{"year":2026,"month":1,"date":"2026-01-05","day":"월","cnt":16,"sales":196000,"settle":147000},{"year":2026,"month":1,"date":"2026-01-06","day":"화","cnt":19,"sales":164000,"settle":123000},{"year":2026,"month":1,"date":"2026-01-07","day":"수","cnt":11,"sales":128000,"settle":96000},{"year":2026,"month":1,"date":"2026-01-08","day":"목","cnt":16,"sales":162000,"settle":121500},{"year":2026,"month":1,"date":"2026-01-09","day":"금","cnt":19,"sales":193000,"settle":144750},{"year":2026,"month":1,"date":"2026-01-10","day":"토","cnt":23,"sales":163000,"settle":122250},{"year":2026,"month":1,"date":"2026-01-11","day":"일","cnt":3,"sales":21000,"settle":15750},{"year":2026,"month":1,"date":"2026-01-12","day":"월","cnt":13,"sales":135000,"settle":101250},{"year":2026,"month":1,"date":"2026-01-13","day":"화","cnt":8,"sales":88000,"settle":66000},{"year":2026,"month":1,"date":"2026-01-14","day":"수","cnt":6,"sales":64000,"settle":48000},{"year":2026,"month":1,"date":"2026-01-15","day":"목","cnt":15,"sales":176000,"settle":132000},{"year":2026,"month":1,"date":"2026-01-16","day":"금","cnt":19,"sales":215000,"settle":161250},{"year":2026,"month":1,"date":"2026-01-17","day":"토","cnt":34,"sales":239000,"settle":179250},{"year":2026,"month":1,"date":"2026-01-18","day":"일","cnt":3,"sales":21000,"settle":15750},{"year":2026,"month":1,"date":"2026-01-19","day":"월","cnt":9,"sales":111000,"settle":83250},{"year":2026,"month":1,"date":"2026-01-20","day":"화","cnt":9,"sales":114000,"settle":85500},{"year":2026,"month":1,"date":"2026-01-21","day":"수","cnt":15,"sales":146000,"settle":109500},{"year":2026,"month":1,"date":"2026-01-22","day":"목","cnt":14,"sales":159000,"settle":119250},{"year":2026,"month":1,"date":"2026-01-23","day":"금","cnt":19,"sales":197000,"settle":147750},{"year":2026,"month":1,"date":"2026-01-24","day":"토","cnt":26,"sales":194000,"settle":145500},{"year":2026,"month":1,"date":"2026-01-25","day":"일","cnt":5,"sales":35000,"settle":26250},{"year":2026,"month":1,"date":"2026-01-26","day":"월","cnt":16,"sales":199000,"settle":149250},{"year":2026,"month":1,"date":"2026-01-27","day":"화","cnt":15,"sales":188000,"settle":141000},{"year":2026,"month":1,"date":"2026-01-28","day":"수","cnt":12,"sales":161000,"settle":120750},{"year":2026,"month":1,"date":"2026-01-29","day":"목","cnt":19,"sales":213000,"settle":159750},{"year":2026,"month":1,"date":"2026-01-30","day":"금","cnt":21,"sales":262000,"settle":196500},{"year":2026,"month":1,"date":"2026-01-31","day":"토","cnt":41,"sales":297000,"settle":222750},{"year":2026,"month":2,"date":"2026-02-01","day":"일","cnt":5,"sales":35000,"settle":26250},{"year":2026,"month":2,"date":"2026-02-02","day":"월","cnt":10,"sales":102000,"settle":76500},{"year":2026,"month":2,"date":"2026-02-03","day":"화","cnt":15,"sales":182000,"settle":136500},{"year":2026,"month":2,"date":"2026-02-04","day":"수","cnt":15,"sales":166000,"settle":124500},{"year":2026,"month":2,"date":"2026-02-05","day":"목","cnt":22,"sales":273000,"settle":204750},{"year":2026,"month":2,"date":"2026-02-06","day":"금","cnt":24,"sales":307000,"settle":230250},{"year":2026,"month":2,"date":"2026-02-07","day":"토","cnt":43,"sales":315000,"settle":236250},{"year":2026,"month":2,"date":"2026-02-08","day":"일","cnt":1,"sales":7000,"settle":5250},{"year":2026,"month":2,"date":"2026-02-09","day":"월","cnt":11,"sales":112000,"settle":84000},{"year":2026,"month":2,"date":"2026-02-10","day":"화","cnt":12,"sales":161000,"settle":120750},{"year":2026,"month":2,"date":"2026-02-11","day":"수","cnt":17,"sales":209000,"settle":156750},{"year":2026,"month":2,"date":"2026-02-12","day":"목","cnt":17,"sales":189000,"settle":141750},{"year":2026,"month":2,"date":"2026-02-13","day":"금","cnt":18,"sales":183000,"settle":137250},{"year":2026,"month":2,"date":"2026-02-14","day":"토","cnt":38,"sales":252000,"settle":189000},{"year":2026,"month":2,"date":"2026-02-15","day":"일","cnt":16,"sales":96000,"settle":72000},{"year":2026,"month":2,"date":"2026-02-16","day":"월","cnt":10,"sales":76000,"settle":57000},{"year":2026,"month":2,"date":"2026-02-17","day":"화","cnt":11,"sales":84000,"settle":63000},{"year":2026,"month":2,"date":"2026-02-18","day":"수","cnt":30,"sales":244000,"settle":183000},{"year":2026,"month":2,"date":"2026-02-19","day":"목","cnt":6,"sales":110000,"settle":82500},{"year":2026,"month":2,"date":"2026-02-20","day":"금","cnt":17,"sales":199000,"settle":149250},{"year":2026,"month":2,"date":"2026-02-21","day":"토","cnt":34,"sales":236000,"settle":177000},{"year":2026,"month":2,"date":"2026-02-22","day":"일","cnt":5,"sales":35000,"settle":26250},{"year":2026,"month":2,"date":"2026-02-23","day":"월","cnt":13,"sales":148000,"settle":111000},{"year":2026,"month":2,"date":"2026-02-24","day":"화","cnt":16,"sales":195000,"settle":146250},{"year":2026,"month":2,"date":"2026-02-25","day":"수","cnt":18,"sales":238000,"settle":178500},{"year":2026,"month":2,"date":"2026-02-26","day":"목","cnt":19,"sales":236000,"settle":177000},{"year":2026,"month":2,"date":"2026-02-27","day":"금","cnt":27,"sales":240000,"settle":180000},{"year":2026,"month":2,"date":"2026-02-28","day":"토","cnt":34,"sales":245000,"settle":183750},{"year":2026,"month":3,"date":"2026-03-01","day":"일","cnt":15,"sales":105000,"settle":78750},{"year":2026,"month":3,"date":"2026-03-02","day":"월","cnt":13,"sales":98000,"settle":73500},{"year":2026,"month":3,"date":"2026-03-03","day":"화","cnt":19,"sales":226000,"settle":169500},{"year":2026,"month":3,"date":"2026-03-04","day":"수","cnt":13,"sales":159000,"settle":119250},{"year":2026,"month":3,"date":"2026-03-05","day":"목","cnt":13,"sales":162000,"settle":121500},{"year":2026,"month":3,"date":"2026-03-06","day":"금","cnt":14,"sales":175000,"settle":131250},{"year":2026,"month":3,"date":"2026-03-07","day":"토","cnt":33,"sales":226000,"settle":169500},{"year":2026,"month":3,"date":"2026-03-08","day":"일","cnt":2,"sales":14000,"settle":10500},{"year":2026,"month":3,"date":"2026-03-09","day":"월","cnt":13,"sales":148000,"settle":111000},{"year":2026,"month":3,"date":"2026-03-10","day":"화","cnt":10,"sales":131000,"settle":98250},{"year":2026,"month":3,"date":"2026-03-11","day":"수","cnt":20,"sales":207000,"settle":155250},{"year":2026,"month":3,"date":"2026-03-12","day":"목","cnt":14,"sales":155000,"settle":116250},{"year":2026,"month":3,"date":"2026-03-13","day":"금","cnt":17,"sales":202000,"settle":151500},{"year":2026,"month":3,"date":"2026-03-14","day":"토","cnt":48,"sales":349000,"settle":261750},{"year":2026,"month":3,"date":"2026-03-15","day":"일","cnt":3,"sales":21000,"settle":15750},{"year":2026,"month":3,"date":"2026-03-16","day":"월","cnt":14,"sales":155000,"settle":116250},{"year":2026,"month":3,"date":"2026-03-17","day":"화","cnt":14,"sales":172000,"settle":129000},{"year":2026,"month":3,"date":"2026-03-18","day":"수","cnt":18,"sales":190000,"settle":142500},{"year":2026,"month":3,"date":"2026-03-19","day":"목","cnt":18,"sales":219000,"settle":164250},{"year":2026,"month":3,"date":"2026-03-20","day":"금","cnt":16,"sales":198000,"settle":148500},{"year":2026,"month":3,"date":"2026-03-21","day":"토","cnt":35,"sales":292000,"settle":219000},{"year":2026,"month":3,"date":"2026-03-22","day":"일","cnt":7,"sales":49000,"settle":36750},{"year":2026,"month":3,"date":"2026-03-23","day":"월","cnt":22,"sales":258000,"settle":193500},{"year":2026,"month":3,"date":"2026-03-24","day":"화","cnt":11,"sales":144000,"settle":108000},{"year":2026,"month":3,"date":"2026-03-25","day":"수","cnt":27,"sales":331000,"settle":248250},{"year":2026,"month":3,"date":"2026-03-26","day":"목","cnt":17,"sales":206000,"settle":154500},{"year":2026,"month":3,"date":"2026-03-27","day":"금","cnt":19,"sales":206000,"settle":154500},{"year":2026,"month":3,"date":"2026-03-28","day":"토","cnt":40,"sales":309000,"settle":231750},{"year":2026,"month":3,"date":"2026-03-29","day":"일","cnt":10,"sales":70000,"settle":52500},{"year":2026,"month":3,"date":"2026-03-30","day":"월","cnt":11,"sales":154000,"settle":115500},{"year":2026,"month":3,"date":"2026-03-31","day":"화","cnt":23,"sales":252000,"settle":189000},{"year":2026,"month":4,"date":"2026-04-01","day":"수","cnt":13,"sales":159000,"settle":119250},{"year":2026,"month":4,"date":"2026-04-02","day":"목","cnt":18,"sales":232000,"settle":174000},{"year":2026,"month":4,"date":"2026-04-03","day":"금","cnt":18,"sales":206000,"settle":154500},{"year":2026,"month":4,"date":"2026-04-04","day":"토","cnt":39,"sales":277000,"settle":207750},{"year":2026,"month":4,"date":"2026-04-05","day":"일","cnt":6,"sales":42000,"settle":31500},{"year":2026,"month":4,"date":"2026-04-06","day":"월","cnt":10,"sales":102000,"settle":76500},{"year":2026,"month":4,"date":"2026-04-07","day":"화","cnt":14,"sales":185000,"settle":138750},{"year":2026,"month":4,"date":"2026-04-08","day":"수","cnt":18,"sales":216000,"settle":162000},{"year":2026,"month":4,"date":"2026-04-09","day":"목","cnt":12,"sales":141000,"settle":105750},{"year":2026,"month":4,"date":"2026-04-10","day":"금","cnt":21,"sales":206000,"settle":154500},{"year":2026,"month":4,"date":"2026-04-11","day":"토","cnt":45,"sales":325000,"settle":243750},{"year":2026,"month":4,"date":"2026-04-12","day":"일","cnt":7,"sales":49000,"settle":36750},{"year":2026,"month":4,"date":"2026-04-13","day":"월","cnt":19,"sales":194000,"settle":145500},{"year":2026,"month":4,"date":"2026-04-14","day":"화","cnt":18,"sales":245000,"settle":183750},{"year":2026,"month":4,"date":"2026-04-15","day":"수","cnt":13,"sales":146000,"settle":109500},{"year":2026,"month":4,"date":"2026-04-16","day":"목","cnt":25,"sales":281000,"settle":210750},{"year":2026,"month":4,"date":"2026-04-17","day":"금","cnt":20,"sales":230000,"settle":172500},{"year":2026,"month":4,"date":"2026-04-18","day":"토","cnt":45,"sales":324000,"settle":243000},{"year":2026,"month":4,"date":"2026-04-19","day":"일","cnt":8,"sales":56000,"settle":42000},{"year":2026,"month":4,"date":"2026-04-20","day":"월","cnt":16,"sales":221000,"settle":165750},{"year":2026,"month":4,"date":"2026-04-21","day":"화","cnt":17,"sales":202000,"settle":151500},{"year":2026,"month":4,"date":"2026-04-22","day":"수","cnt":17,"sales":137000,"settle":102750},{"year":2026,"month":4,"date":"2026-04-23","day":"목","cnt":17,"sales":161000,"settle":120750},{"year":2026,"month":4,"date":"2026-04-24","day":"금","cnt":18,"sales":159000,"settle":119250},{"year":2026,"month":4,"date":"2026-04-25","day":"토","cnt":47,"sales":324000,"settle":243000},{"year":2026,"month":4,"date":"2026-04-26","day":"일","cnt":3,"sales":21000,"settle":15750},{"year":2026,"month":4,"date":"2026-04-27","day":"월","cnt":18,"sales":215000,"settle":161250},{"year":2026,"month":4,"date":"2026-04-28","day":"화","cnt":12,"sales":161000,"settle":120750},{"year":2026,"month":4,"date":"2026-04-29","day":"수","cnt":30,"sales":296000,"settle":222000},{"year":2026,"month":4,"date":"2026-04-30","day":"목","cnt":26,"sales":262000,"settle":196500},{"year":2026,"month":5,"date":"2026-05-01","day":"금","cnt":33,"sales":227000,"settle":170250},{"year":2026,"month":5,"date":"2026-05-02","day":"토","cnt":57,"sales":393000,"settle":294750},{"year":2026,"month":5,"date":"2026-05-03","day":"일","cnt":4,"sales":28000,"settle":21000},{"year":2026,"month":5,"date":"2026-05-04","day":"월","cnt":24,"sales":213000,"settle":159750},{"year":2026,"month":5,"date":"2026-05-05","day":"화","cnt":24,"sales":179000,"settle":134250},{"year":2026,"month":5,"date":"2026-05-06","day":"수","cnt":19,"sales":222000,"settle":166500}],"modu_product":[{"year":2025,"month":8,"product":"3시간권","cnt":43,"sales":430000,"settle":387000},{"year":2025,"month":8,"product":"3시간권(토)","cnt":79,"sales":474000,"settle":426600},{"year":2025,"month":8,"product":"당일권","cnt":18,"sales":360000,"settle":324000},{"year":2025,"month":8,"product":"심야권","cnt":8,"sales":80000,"settle":72000},{"year":2025,"month":8,"product":"야간권","cnt":144,"sales":1008000,"settle":907200},{"year":2025,"month":8,"product":"휴일 당일권","cnt":24,"sales":240000,"settle":216000},{"year":2025,"month":9,"product":"3시간권","cnt":63,"sales":630000,"settle":567000},{"year":2025,"month":9,"product":"3시간권(토)","cnt":75,"sales":450000,"settle":405000},{"year":2025,"month":9,"product":"당일권","cnt":96,"sales":1920000,"settle":1728000},{"year":2025,"month":9,"product":"심야권","cnt":10,"sales":100000,"settle":90000},{"year":2025,"month":9,"product":"야간권","cnt":147,"sales":1029000,"settle":926100},{"year":2025,"month":9,"product":"휴일 당일권","cnt":38,"sales":380000,"settle":342000},{"year":2025,"month":10,"product":"3시간권","cnt":74,"sales":740000,"settle":666000},{"year":2025,"month":10,"product":"3시간권(토)","cnt":83,"sales":498000,"settle":448200},{"year":2025,"month":10,"product":"당일권","cnt":39,"sales":780000,"settle":702000},{"year":2025,"month":10,"product":"심야권","cnt":9,"sales":90000,"settle":81000},{"year":2025,"month":10,"product":"야간권","cnt":139,"sales":973000,"settle":875700},{"year":2025,"month":10,"product":"휴일 당일권","cnt":36,"sales":360000,"settle":324000},{"year":2025,"month":11,"product":"3시간권","cnt":99,"sales":990000,"settle":891000},{"year":2025,"month":11,"product":"3시간권(토)","cnt":99,"sales":594000,"settle":534600},{"year":2025,"month":11,"product":"당일권","cnt":51,"sales":1020000,"settle":918000},{"year":2025,"month":11,"product":"심야권","cnt":19,"sales":190000,"settle":171000},{"year":2025,"month":11,"product":"야간권","cnt":181,"sales":1267000,"settle":1140300},{"year":2025,"month":11,"product":"휴일 당일권","cnt":40,"sales":400000,"settle":360000},{"year":2025,"month":12,"product":"3시간권","cnt":105,"sales":1050000,"settle":787500},{"year":2025,"month":12,"product":"3시간권(토)","cnt":79,"sales":474000,"settle":355500},{"year":2025,"month":12,"product":"당일권","cnt":59,"sales":1180000,"settle":885000},{"year":2025,"month":12,"product":"심야권","cnt":75,"sales":639000,"settle":479250},{"year":2025,"month":12,"product":"야간권","cnt":153,"sales":1071000,"settle":803250},{"year":2025,"month":12,"product":"휴일 당일권","cnt":34,"sales":340000,"settle":255000},{"year":2026,"month":1,"product":"3시간권","cnt":108,"sales":1080000,"settle":810000},{"year":2026,"month":1,"product":"3시간권(토)","cnt":91,"sales":546000,"settle":409500},{"year":2026,"month":1,"product":"당일권","cnt":81,"sales":1620000,"settle":1215000},{"year":2026,"month":1,"product":"심야권","cnt":194,"sales":1358000,"settle":1018500},{"year":2026,"month":1,"product":"휴일 당일권","cnt":37,"sales":370000,"settle":277500},{"year":2026,"month":2,"product":"3시간권","cnt":79,"sales":790000,"settle":592500},{"year":2026,"month":2,"product":"3시간권(토)","cnt":79,"sales":474000,"settle":355500},{"year":2026,"month":2,"product":"당일권","cnt":85,"sales":1700000,"settle":1275000},{"year":2026,"month":2,"product":"심야권","cnt":207,"sales":1399000,"settle":1049250},{"year":2026,"month":2,"product":"휴일 당일권","cnt":54,"sales":512000,"settle":384000},{"year":2026,"month":3,"product":"3시간권","cnt":112,"sales":1120000,"settle":840000},{"year":2026,"month":3,"product":"3시간권(토)","cnt":87,"sales":522000,"settle":391500},{"year":2026,"month":3,"product":"당일권","cnt":101,"sales":2020000,"settle":1515000},{"year":2026,"month":3,"product":"심야권","cnt":201,"sales":1419000,"settle":1064250},{"year":2026,"month":3,"product":"휴일 당일권","cnt":48,"sales":502000,"settle":376500},{"year":2026,"month":4,"product":"3시간권","cnt":110,"sales":1100000,"settle":825000},{"year":2026,"month":4,"product":"3시간권(토)","cnt":90,"sales":540000,"settle":405000},{"year":2026,"month":4,"product":"당일권","cnt":99,"sales":1990000,"settle":1492500},{"year":2026,"month":4,"product":"심야권","cnt":251,"sales":1757000,"settle":1317750},{"year":2026,"month":4,"product":"휴일 당일권","cnt":40,"sales":388000,"settle":291000},{"year":2026,"month":5,"product":"3시간권","cnt":23,"sales":230000,"settle":172500},{"year":2026,"month":5,"product":"3시간권(토)","cnt":59,"sales":354000,"settle":265500},{"year":2026,"month":5,"product":"당일권","cnt":5,"sales":100000,"settle":75000},{"year":2026,"month":5,"product":"심야권","cnt":44,"sales":308000,"settle":231000},{"year":2026,"month":5,"product":"휴일 당일권","cnt":30,"sales":270000,"settle":202500}],"modu_cancel":[{"year":2025,"month":8,"cnt":27,"amt":215000},{"year":2025,"month":9,"cnt":52,"amt":445000},{"year":2025,"month":10,"cnt":39,"amt":326000},{"year":2025,"month":11,"cnt":56,"amt":483000},{"year":2025,"month":12,"cnt":51,"amt":472000},{"year":2026,"month":1,"cnt":40,"amt":348000},{"year":2026,"month":2,"cnt":30,"amt":278000},{"year":2026,"month":3,"cnt":38,"amt":319000},{"year":2026,"month":4,"cnt":55,"amt":514000},{"year":2026,"month":5,"cnt":16,"amt":120000}],"modu_pricing_history":{"current":{"as_of":"2026-04-24","products":[{"name":"평일 당일권","price":20000,"daily_limit":5,"hours":"00:00~23:59","note":"★ 변경"},{"name":"휴일 당일권(토·공휴일)","price":9000,"daily_limit":20,"hours":"00:00~23:59","note":"일요일 제외(영락교회)"},{"name":"3시간권(평일)","price":10000,"daily_limit":20,"hours":"00:00~23:59","note":""},{"name":"3시간권(토)","price":6000,"daily_limit":30,"hours":"00:00~23:59","note":""},{"name":"심야권","price":7000,"daily_limit":20,"hours":"17:00~익일06:00","note":""}]},"phases":[{"phase":1,"label":"최초 운영 개시","date":"2025-07-16","end_date":"2025-08-05","changes":[{"name":"평일 당일권","price":20000,"daily_limit":10,"hours":"00:00~23:59"},{"name":"휴일 당일권","price":10000,"daily_limit":20,"hours":"00:00~23:59"},{"name":"3시간권(평일)","price":10000,"daily_limit":20,"hours":"00:00~23:59"},{"name":"3시간권(토)","price":6000,"daily_limit":20,"hours":"00:00~23:59"},{"name":"야간권","price":7000,"daily_limit":15,"hours":"17:00~23:59"},{"name":"심야권","price":10000,"daily_limit":20,"hours":"17:00~익일06:00"}],"note":"야간권(7,000원)·심야권(10,000원) 병행 운영 시작"},{"phase":2,"label":"야간권 폐지·심야권 단가 인하","date":"2025-12-23","end_date":"2026-04-20","changes":[{"name":"야간권","before":"7,000원 / 15매","after":"폐지","reason":"심야권으로 통합"},{"name":"심야권","before":"10,000원 / 20매","after":"7,000원 / 20매","reason":"야간권 흡수 통합"}],"note":"야간권 마지막 판매 2025-12-22. 약 4개월 병행 후 통합"},{"phase":3,"label":"수익구조 개선","date":"2026-04-21","end_date":"2026-04-23","changes":[{"name":"평일 당일권","before":"20,000원","after":"25,000원","reason":"수익 개선"},{"name":"휴일 당일권(토)","before":"10,000원","after":"9,000원","reason":"인근 경쟁 주차장(9,000원) 대응"},{"name":"3시간권(토)","before":"한도 20매","after":"한도 30매","reason":"완판율 63.6%, 한도 초과 7회 — 수요 대응"}],"note":"평일 당일권 25,000원 인상 — 3일간 판매 급감(0건·1건·1건)으로 다음 Phase로 빠르게 조정"},{"phase":4,"label":"당일권 가격 원복·수량 제한","date":"2026-04-24","end_date":null,"changes":[{"name":"평일 당일권","before":"25,000원 / 10매","after":"20,000원 / 5매","reason":"회전율 개선 및 고객 이탈 방지"}],"note":"5매 제한+초과분 3시간권 전환 시 일평균 수익 98,400원 예상 (기존 93,200원 대비 +5.5%)"}]}};
+
+// sales_daily: 납부일자 기준 일별 7개 항목 데이터 (엑셀 추출 시 여기에 삽입)
+// 구조 예: {date:"2023-01-02",입주사:0,직원정기:0,직원일일:0,관리실정기:0,관리실일일:0,일반정기:0,일일매출:50000}
+DATA.sales_daily = [];
+
+// ======= 유틸 함수 =======
+const COLORS = {
+  입주사:'#3B82F6', 직원정기:'#22C55E', 직원일일:'#86EFAC',
+  관리실정기:'#EAB308', 관리실일일:'#F59E0B',
+  일반정기:'#EC4899', 일일매출:'#8B5CF6', 모두의주차:'#06B6D4'
+};
+const YEAR_COLORS = {2023:'#94A3B8',2024:'#3B82F6',2025:'#10B981',2026:'#F59E0B'};
+
+function fmt(n) {
+  if(n==null||isNaN(n)) return '-';
+  return Math.round(n).toLocaleString('ko-KR')+'원';
+}
+function fmtMan(n) {
+  if(n==null||isNaN(n)) return '-';
+  if(Math.abs(n)>=10000000) return (n/10000000).toFixed(1)+'천만원';
+  if(Math.abs(n)>=1000000) return (n/10000).toFixed(1)+'만원';
+  return Math.round(n).toLocaleString('ko-KR')+'원';
+}
+function changeBadge(diff, pct) {
+  if(diff===0) return `<span class="flat">● 변동없음</span>`;
+  const sign = diff>0?'▲':'▼';
+  const cls = diff>0?'up':'down';
+  const p = Math.abs(pct).toFixed(1);
+  return `<span class="${cls}">${sign} ${fmtMan(Math.abs(diff))} (${p}%)</span>`;
+}
+function kpiCard(label, value, change='') {
+  return `<div class="kpi"><div class="label">${label}</div><div class="value">${value}</div>${change?'<div class="change">'+change+'</div>':''}</div>`;
+}
+
+// ======= 필터 상태 =======
+let filterYear = 'all';
+let filterStartYm = '2023-01';
+let filterEndYm = '2026-04';
+const allYms = DATA.sales_monthly.map(d=>d.ym);
+let filterMode = 'month';
+let filterStartDate = '2025-08-04';
+let filterEndDate = '2026-05-06';
+const ZOOM_PLUGIN = { zoom:{wheel:{enabled:true},pinch:{enabled:true},mode:'x'}, pan:{enabled:true,mode:'x'} };
+const SALES_CATS = ['입주사','직원정기','직원일일','관리실정기','관리실일일','일반정기','일일매출','모두의주차'];
+const CAT_DARK = new Set(['직원일일','관리실정기']); // 밝은 색→어두운 텍스트
+let salesViewMode = 'year';       // 'year' | 'breakdown'
+let selectedSalesCats = new Set(SALES_CATS);
+
+function initFilters() {
+  const sm = document.getElementById('startMonth');
+  const em = document.getElementById('endMonth');
+  allYms.forEach(ym => {
+    sm.add(new Option(ym, ym));
+    em.add(new Option(ym, ym));
+  });
+  sm.value = filterStartYm;
+  em.value = allYms[allYms.length-1];
+  filterEndYm = em.value;
+
+  document.querySelectorAll('.year-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.year-btn').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      filterYear = b.dataset.year;
+      if(filterYear !== 'all') {
+        const yms = DATA.sales_monthly.filter(d=>d.year==filterYear).map(d=>d.ym);
+        if(yms.length>0){
+          filterStartYm = yms[0];
+          filterEndYm = yms[yms.length-1];
+          sm.value = filterStartYm;
+          em.value = filterEndYm;
+        }
+      } else {
+        filterStartYm = allYms[0];
+        filterEndYm = allYms[allYms.length-1];
+        sm.value = filterStartYm;
+        em.value = filterEndYm;
+      }
+      renderAll();
+    });
+  });
+  sm.addEventListener('change', ()=>{ filterStartYm=sm.value; filterYear='all'; document.querySelectorAll('.year-btn').forEach(b=>b.classList.remove('active')); document.querySelector('[data-year=all]').classList.add('active'); renderAll(); });
+  em.addEventListener('change', ()=>{ filterEndYm=em.value; filterYear='all'; document.querySelectorAll('.year-btn').forEach(b=>b.classList.remove('active')); document.querySelector('[data-year=all]').classList.add('active'); renderAll(); });
+
+  // 분석단위 토글
+  document.querySelectorAll('.mode-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.mode-btn').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      filterMode = b.dataset.mode;
+      const mf = document.getElementById('monthly-filters');
+      const df = document.getElementById('daily-filters');
+      mf.style.display = filterMode==='month' ? 'flex' : 'none';
+      df.style.display = filterMode==='day' ? 'flex' : 'none';
+      renderAll();
+    });
+  });
+
+  // 일단위 날짜 입력
+  document.getElementById('startDate').addEventListener('change', e => { filterStartDate=e.target.value; renderAll(); });
+  document.getElementById('endDate').addEventListener('change', e => { filterEndDate=e.target.value; renderAll(); });
+
+  // ===== 매출 뷰모드 버튼 (연도별 합계 / 항목별 추이) =====
+  document.querySelectorAll('.sales-view-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.sales-view-btn').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      salesViewMode = b.dataset.sview;
+      document.getElementById('sales-cat-wrap').style.display = salesViewMode==='breakdown' ? 'flex' : 'none';
+      renderSalesLine();
+    });
+  });
+
+  // 카테고리 개별 버튼
+  document.querySelectorAll('.sales-cat-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      const cat = b.dataset.cat;
+      const clr = COLORS[cat];
+      if(selectedSalesCats.has(cat)) {
+        if(selectedSalesCats.size > 1) {          // 최소 1개 유지
+          selectedSalesCats.delete(cat);
+          b.style.background = '#fff';
+          b.style.color = clr;
+        }
+      } else {
+        selectedSalesCats.add(cat);
+        b.style.background = clr;
+        b.style.color = CAT_DARK.has(cat) ? '#333' : '#fff';
+      }
+      renderSalesLine();
+    });
+  });
+
+  // [전체] 버튼
+  document.getElementById('sales-cat-all').addEventListener('click', () => {
+    SALES_CATS.forEach(c => selectedSalesCats.add(c));
+    document.querySelectorAll('.sales-cat-btn').forEach(b => {
+      const clr = COLORS[b.dataset.cat];
+      b.style.background = clr;
+      b.style.color = CAT_DARK.has(b.dataset.cat) ? '#333' : '#fff';
+    });
+    renderSalesLine();
+  });
+}
+
+function getFilteredSales() {
+  if(filterMode === 'day') {
+    const s = filterStartDate.slice(0,7), e = filterEndDate.slice(0,7);
+    return DATA.sales_monthly.filter(d => d.ym >= s && d.ym <= e);
+  }
+  return DATA.sales_monthly.filter(d => d.ym >= filterStartYm && d.ym <= filterEndYm);
+}
+function getFilteredInout() {
+  if(filterMode === 'day') {
+    const s = filterStartDate.slice(0,7), e = filterEndDate.slice(0,7);
+    return DATA.inout_monthly.filter(d => d.ym >= s && d.ym <= e);
+  }
+  return DATA.inout_monthly.filter(d => d.ym >= filterStartYm && d.ym <= filterEndYm);
+}
+
+// ======= 차트 인스턴스 관리 =======
+const charts = {};
+function destroyChart(id) { if(charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+// ======= 탭 전환 =======
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('tab-'+t.dataset.tab).classList.add('active');
+  });
+});
+
+// ======= 매출 라인 차트 제목 갱신 =======
+function updateSalesLineTitle() {
+  const el = document.getElementById('sales-line-title');
+  if(!el) return;
+  if(filterMode === 'month') {
+    el.textContent = salesViewMode==='year' ? '월별 전체 매출 (연도별)' : '월별 매출 (항목별 추이)';
+  } else {
+    el.textContent = salesViewMode==='year' ? '일별 합계 매출' : '일별 매출 (항목별 추이)';
+  }
+}
+
+// ======= 매출 라인 차트 렌더링 (분기 처리) =======
+function renderSalesLine() {
+  destroyChart('sales-line');
+  updateSalesLineTitle();
+  const lineCtx = document.getElementById('chart-sales-line').getContext('2d');
+  const tooltip = { callbacks:{ label: ctx => ctx.dataset.label+': '+(ctx.raw!=null?(ctx.raw.toFixed(1)+'만원'):'-') } };
+
+  /* ── 월단위 ── */
+  if(filterMode === 'month') {
+    const data = getFilteredSales();
+
+    if(salesViewMode === 'year') {
+      /* 월단위 + 연도별: 1~12월 x축, 연도별 라인 */
+      const years = [...new Set(data.map(d=>d.year))];
+      const datasets = years.map(yr => {
+        const pts = [];
+        for(let m=1;m<=12;m++){
+          const r = data.find(d=>d.year===yr&&d.month===m);
+          pts.push(r ? r.total/10000 : null);
+        }
+        return { label:String(yr), data:pts, borderColor:YEAR_COLORS[yr], backgroundColor:YEAR_COLORS[yr]+'33', tension:0.3, spanGaps:true, pointRadius:3 };
+      });
+      charts['sales-line'] = new Chart(lineCtx, {
+        type:'line',
+        data:{ labels:['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'], datasets },
+        options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'top'}, zoom:ZOOM_PLUGIN, tooltip }, scales:{ y:{title:{display:true,text:'만원'}} } }
+      });
+    } else {
+      /* 월단위 + 항목별: ym x축, 항목별 라인 */
+      const cats = SALES_CATS.filter(c=>selectedSalesCats.has(c));
+      const datasets = cats.map(c=>({
+        label:c, data:data.map(d=>(d[c]||0)/10000), borderColor:COLORS[c], backgroundColor:COLORS[c]+'22', tension:0.3, pointRadius:3, spanGaps:true
+      }));
+      charts['sales-line'] = new Chart(lineCtx, {
+        type:'line',
+        data:{ labels:data.map(d=>d.ym), datasets },
+        options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'top',labels:{font:{size:10}}}, zoom:ZOOM_PLUGIN, tooltip }, scales:{ x:{ticks:{maxRotation:90,font:{size:9}}}, y:{title:{display:true,text:'만원'}} } }
+      });
+    }
+    return;
+  }
+
+  /* ── 일단위 ── */
+  const startD = filterStartDate;
+  const endD   = filterEndDate;
+
+  // 날짜 목록 생성
+  const dates = [];
+  const cur = new Date(startD);
+  const fin = new Date(endD);
+  while(cur <= fin){ dates.push(cur.toISOString().slice(0,10)); cur.setDate(cur.getDate()+1); }
+
+  // modu_daily map
+  const moduMap = {};
+  DATA.modu_daily.filter(d=>d.date>=startD&&d.date<=endD).forEach(d=>{ moduMap[d.date]=d.sales; });
+
+  // sales_daily map (비어있을 수도 있음)
+  const sdMap = {};
+  const hasSd = DATA.sales_daily && DATA.sales_daily.length > 0;
+  if(hasSd) DATA.sales_daily.filter(d=>d.date>=startD&&d.date<=endD).forEach(d=>{ sdMap[d.date]=d; });
+
+  const xOpts = { ticks:{ maxTicksLimit:40, maxRotation:90, font:{size:8} } };
+
+  if(salesViewMode === 'year') {
+    /* 일단위 + 연도별 합계: 단일 라인(fill) */
+    const SD_KEYS = ['입주사','직원정기','직원일일','관리실정기','관리실일일','일반정기','일일매출'];
+    const vals = dates.map(d => {
+      const modu = moduMap[d]||0;
+      const sd = sdMap[d];
+      const sdTotal = sd ? SD_KEYS.reduce((a,k)=>a+(sd[k]||0),0) : 0;
+      return (sdTotal+modu)/10000 || null;
+    });
+    const lbl = hasSd ? '일별 합계' : '일별 합계 (모두의주차만)';
+    charts['sales-line'] = new Chart(lineCtx, {
+      type:'line',
+      data:{ labels:dates, datasets:[{ label:lbl, data:vals, borderColor:'#1F4E79', backgroundColor:'#1F4E7933', fill:true, tension:0.3, pointRadius:1, spanGaps:true }] },
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'top'}, zoom:ZOOM_PLUGIN, tooltip }, scales:{ x:xOpts, y:{title:{display:true,text:'만원'}} } }
+    });
+  } else {
+    /* 일단위 + 항목별: 선택된 항목별 라인 */
+    const cats = SALES_CATS.filter(c=>selectedSalesCats.has(c));
+    const datasets = cats.map(c => {
+      const data = dates.map(d => {
+        if(c==='모두의주차') return (moduMap[d]||0)/10000 || null;
+        if(!hasSd) return null;
+        const sd = sdMap[d];
+        return sd ? (sd[c]||0)/10000 : null;
+      });
+      return { label:c, data, borderColor:COLORS[c], backgroundColor:COLORS[c]+'22', tension:0.3, pointRadius:1, spanGaps:true };
+    });
+    charts['sales-line'] = new Chart(lineCtx, {
+      type:'line',
+      data:{ labels:dates, datasets },
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'top',labels:{font:{size:10}}}, zoom:ZOOM_PLUGIN, tooltip }, scales:{ x:xOpts, y:{title:{display:true,text:'만원'}} } }
+    });
+    if(!hasSd) {
+      // sales_daily 없으면 안내 텍스트를 차트 위에 표시
+      const msg = document.createElement('p');
+      msg.style.cssText='font-size:11px;color:#F59E0B;margin-top:4px';
+      msg.textContent='※ sales_daily 데이터 미삽입 — 모두의주차 항목만 표시됩니다.';
+      const wrap = document.getElementById('chart-sales-line').parentNode;
+      if(!wrap.querySelector('.sd-notice')) { msg.className='sd-notice'; wrap.appendChild(msg); }
+    } else {
+      const n = document.querySelector('.sd-notice');
+      if(n) n.remove();
+    }
+  }
+}
+
+// ======= ① 매출 요약 =======
+function renderSales() {
+  const data = getFilteredSales();
+  if(!data.length) { document.getElementById('kpi-sales').innerHTML='<div class="no-data">데이터 없음</div>'; return; }
+  const lastRow = data[data.length-1];
+  const prevIdx = DATA.sales_monthly.findIndex(d=>d.ym===lastRow.ym)-1;
+  const prevRow = prevIdx>=0 ? DATA.sales_monthly[prevIdx] : null;
+  const prevYearRow = DATA.sales_monthly.find(d=>d.year===lastRow.year-1&&d.month===lastRow.month)||null;
+
+  const mom = prevRow ? lastRow.total - prevRow.total : 0;
+  const momPct = prevRow && prevRow.total ? mom/prevRow.total*100 : 0;
+  const yoy = prevYearRow ? lastRow.total - prevYearRow.total : 0;
+  const yoyPct = prevYearRow && prevYearRow.total ? yoy/prevYearRow.total*100 : 0;
+
+  document.getElementById('kpi-sales').innerHTML =
+    kpiCard(`${lastRow.ym} 전체 합계`, fmtMan(lastRow.total)) +
+    kpiCard('전월 대비', fmtMan(lastRow.total), prevRow ? changeBadge(mom,momPct) : '전월 없음') +
+    kpiCard('전년동월 대비', fmtMan(lastRow.total), prevYearRow ? changeBadge(yoy,yoyPct) : '전년 없음');
+
+  // 라인 차트 (renderSalesLine이 filterMode + salesViewMode 분기 처리)
+  renderSalesLine();
+
+  // 도넛
+  destroyChart('sales-donut');
+  const donutCtx = document.getElementById('chart-sales-donut').getContext('2d');
+  const keys = ['입주사','직원정기','직원일일','관리실정기','관리실일일','일반정기','일일매출','모두의주차'];
+  const sums = keys.map(k => data.reduce((a,d)=>a+(d[k]||0),0));
+  charts['sales-donut'] = new Chart(donutCtx, {
+    type:'doughnut',
+    data:{ labels:keys, datasets:[{ data:sums, backgroundColor:keys.map(k=>COLORS[k]) }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'right', labels:{ font:{size:10} } }, tooltip:{ callbacks:{ label: ctx => ctx.label+': '+fmtMan(ctx.raw)+' ('+((ctx.raw/sums.reduce((a,b)=>a+b,0))*100).toFixed(1)+'%)' } } } }
+  });
+
+  // 스택 바
+  destroyChart('sales-stack');
+  const stackCtx = document.getElementById('chart-sales-stack').getContext('2d');
+  const stackDs = keys.map(k => ({
+    label:k, data: data.map(d=>(d[k]||0)/10000), backgroundColor: COLORS[k], stack:'a'
+  }));
+  charts['sales-stack'] = new Chart(stackCtx, {
+    type:'bar',
+    data:{ labels: data.map(d=>d.ym), datasets: stackDs },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'top', labels:{ font:{size:10} } }, zoom:ZOOM_PLUGIN }, scales:{ x:{ ticks:{ maxRotation:90, font:{size:9} } }, y:{ stacked:true, title:{ display:true, text:'만원' } } } }
+  });
+}
+
+// ======= ② 입출차 현황 =======
+function renderInout() {
+  const data = getFilteredInout();
+  if(!data.length) { document.getElementById('kpi-inout').innerHTML='<div class="no-data">데이터 없음</div>'; return; }
+  const totalCnt = data.reduce((a,d)=>a+d.total_cnt,0);
+  const paidCnt = data.reduce((a,d)=>a+d.paid_cnt,0);
+  const cashAmt = data.reduce((a,d)=>a+d.cash_amt,0);
+  const paidRate = totalCnt>0 ? (paidCnt/totalCnt*100).toFixed(1) : 0;
+
+  document.getElementById('kpi-inout').innerHTML =
+    kpiCard('총 입출차 건수', totalCnt.toLocaleString()+'건') +
+    kpiCard('유료 건수', paidCnt.toLocaleString()+'건') +
+    kpiCard('유료율', paidRate+'%') +
+    kpiCard('현장 결제금액', fmtMan(cashAmt));
+
+  // 월별 바 (유료/무료 스택)
+  destroyChart('inout-monthly');
+  const ctx1 = document.getElementById('chart-inout-monthly').getContext('2d');
+  charts['inout-monthly'] = new Chart(ctx1, {
+    type:'bar',
+    data:{
+      labels: data.map(d=>d.ym),
+      datasets:[
+        { label:'유료', data: data.map(d=>d.paid_cnt), backgroundColor:'#3B82F6', stack:'a' },
+        { label:'현장미결제', data: data.map(d=>d.free_cnt), backgroundColor:'#94A3B8', stack:'a' }
+      ]
+    },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'top'}, zoom:ZOOM_PLUGIN }, scales:{ x:{ stacked:true, ticks:{ maxRotation:90, font:{size:9} } }, y:{ stacked:true } } }
+  });
+
+  // 요일별
+  destroyChart('inout-weekday');
+  const ctx2 = document.getElementById('chart-inout-weekday').getContext('2d');
+  charts['inout-weekday'] = new Chart(ctx2, {
+    type:'bar',
+    data:{
+      labels: DATA.weekday.map(d=>d.day),
+      datasets:[
+        { label:'총 건수', data: DATA.weekday.map(d=>d.cnt), backgroundColor:'#3B82F6' },
+        { label:'유료', data: DATA.weekday.map(d=>d.paid), backgroundColor:'#22C55E' }
+      ]
+    },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'top'} } }
+  });
+
+  // 시간대별
+  destroyChart('inout-hourly');
+  const ctx3 = document.getElementById('chart-inout-hourly').getContext('2d');
+  const peakHours = [9,11,13]; // 피크타임
+  const bgColors = DATA.hourly.map(d => peakHours.includes(d.hour)?'#EF4444':'#3B82F6');
+  charts['inout-hourly'] = new Chart(ctx3, {
+    type:'bar',
+    data:{
+      labels: DATA.hourly.map(d=>d.hour+'시'),
+      datasets:[{ label:'건수', data: DATA.hourly.map(d=>d.cnt), backgroundColor: bgColors }]
+    },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'top'}, tooltip:{ callbacks:{ afterLabel: ctx => '  (빨간색=피크타임)' } } } }
+  });
+}
+
+// ======= ③ 모두의주차 =======
+function renderModu() {
+  const noDataEl = document.getElementById('modu-nodata');
+  const mainEl = document.getElementById('modu-main');
+
+  // 선택 기간에 모두의주차 데이터가 없으면 (2025-08 이전)
+  const effectiveEndYm = filterMode==='day' ? filterEndDate.slice(0,7) : filterEndYm;
+  const effectiveStartYm = filterMode==='day' ? filterStartDate.slice(0,7) : filterStartYm;
+  if(effectiveEndYm < '2025-08') {
+    noDataEl.style.display='block'; mainEl.style.display='none'; return;
+  }
+  noDataEl.style.display='none'; mainEl.style.display='block';
+
+  // 필터 헬퍼
+  const ymOf = d => String(d.year)+'-'+String(d.month).padStart(2,'0');
+  const inRange = ym => ym >= effectiveStartYm && ym <= effectiveEndYm;
+
+  // 필터된 데이터
+  const filteredDaily = filterMode==='day'
+    ? DATA.modu_daily.filter(d => d.date >= filterStartDate && d.date <= filterEndDate)
+    : DATA.modu_daily.filter(d => inRange(d.date.slice(0,7)));
+  const filteredProduct = DATA.modu_product.filter(d => inRange(ymOf(d)));
+  const filteredCancel = DATA.modu_cancel.filter(d => inRange(ymOf(d)));
+
+  // KPI
+  const totalSales = filteredDaily.reduce((a,d)=>a+d.sales,0);
+  const totalSettle = filteredDaily.reduce((a,d)=>a+d.settle,0);
+  const totalCnt = filteredDaily.reduce((a,d)=>a+d.cnt,0);
+  const totalCancel = filteredCancel.reduce((a,d)=>a+d.cnt,0);
+  const cancelRate = totalCnt+totalCancel>0 ? (totalCancel/(totalCnt+totalCancel)*100).toFixed(1) : 0;
+
+  document.getElementById('kpi-modu').innerHTML =
+    kpiCard('판매금액 합계', fmtMan(totalSales)) +
+    kpiCard('정산금액 합계', fmtMan(totalSettle)) +
+    kpiCard('총 건수 (결제완료)', totalCnt.toLocaleString()+'건') +
+    kpiCard('취소율', cancelRate+'%');
+
+  // 판매 vs 정산 차트 (일단위: 일별바, 월단위: 월별라인+phase수직선)
+  destroyChart('modu-trend');
+  const trendCtx = document.getElementById('chart-modu-trend').getContext('2d');
+  document.getElementById('chart-modu-trend').closest('.chart-card').querySelector('h3').textContent =
+    filterMode==='day' ? '일별 판매금액 vs 정산금액' : '월별 판매금액 vs 정산금액';
+
+  if(filterMode === 'day') {
+    charts['modu-trend'] = new Chart(trendCtx, {
+      type:'bar',
+      data:{
+        labels: filteredDaily.map(d=>d.date),
+        datasets:[
+          { label:'판매금액', data: filteredDaily.map(d=>d.sales/10000), backgroundColor:'#06B6D4' },
+          { label:'정산금액', data: filteredDaily.map(d=>d.settle/10000), backgroundColor:'#0369A1' }
+        ]
+      },
+      options:{ responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{position:'top'}, zoom:ZOOM_PLUGIN,
+          tooltip:{ callbacks:{ label: ctx => ctx.dataset.label+': '+ctx.raw.toFixed(1)+'만원' } } },
+        scales:{ x:{ ticks:{ maxRotation:90, font:{size:8} } }, y:{ title:{display:true,text:'만원'} } } }
+    });
+  } else {
+    const moduByMonth = {};
+    filteredDaily.forEach(d => {
+      const ym = d.date.slice(0,7);
+      if(!moduByMonth[ym]) moduByMonth[ym]={sales:0,settle:0};
+      moduByMonth[ym].sales+=d.sales;
+      moduByMonth[ym].settle+=d.settle;
+    });
+    const moduYms = Object.keys(moduByMonth).sort();
+    const phases = DATA.modu_pricing_history.phases;
+    const phaseColors = ['#EF4444','#F59E0B','#8B5CF6','#22C55E'];
+    const phaseLinePlugin = {
+      id:'phaseLines',
+      afterDraw(chart) {
+        const {ctx, scales:{x,y}} = chart;
+        phases.forEach((ph,i) => {
+          const phYm = ph.date.slice(0,7);
+          const idx = moduYms.indexOf(phYm);
+          if(idx<0) return;
+          const xPos = x.getPixelForValue(idx);
+          ctx.save();
+          ctx.beginPath();
+          ctx.strokeStyle = phaseColors[i];
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5,4]);
+          ctx.moveTo(xPos, y.top);
+          ctx.lineTo(xPos, y.bottom);
+          ctx.stroke();
+          ctx.fillStyle = phaseColors[i];
+          ctx.font = 'bold 10px Malgun Gothic';
+          ctx.fillText('P'+ph.phase, xPos+3, y.top+12);
+          ctx.restore();
+        });
+      }
+    };
+    charts['modu-trend'] = new Chart(trendCtx, {
+      type:'line',
+      data:{
+        labels: moduYms,
+        datasets:[
+          { label:'판매금액', data: moduYms.map(ym=>moduByMonth[ym].sales/10000), borderColor:'#06B6D4', backgroundColor:'#06B6D433', tension:0.3, fill:true },
+          { label:'정산금액', data: moduYms.map(ym=>moduByMonth[ym].settle/10000), borderColor:'#0369A1', backgroundColor:'#0369A133', tension:0.3 }
+        ]
+      },
+      plugins:[phaseLinePlugin],
+      options:{ responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{position:'top'}, zoom:ZOOM_PLUGIN, tooltip:{ callbacks:{ label: ctx => ctx.dataset.label+': '+ctx.raw.toFixed(1)+'만원' } } },
+        scales:{ y:{ title:{ display:true, text:'만원' } } } }
+    });
+  }
+
+  // 상품별 도넛
+  destroyChart('modu-product');
+  const prodCtx = document.getElementById('chart-modu-product').getContext('2d');
+  const prodMap = {};
+  filteredProduct.forEach(d => { prodMap[d.product]=(prodMap[d.product]||0)+d.sales; });
+  const prodKeys = Object.keys(prodMap);
+  const prodColors = ['#06B6D4','#3B82F6','#8B5CF6','#EC4899','#F59E0B','#22C55E','#EF4444'];
+  charts['modu-product'] = new Chart(prodCtx, {
+    type:'doughnut',
+    data:{ labels:prodKeys, datasets:[{ data:prodKeys.map(k=>prodMap[k]), backgroundColor:prodColors }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'right', labels:{ font:{size:10} } } } }
+  });
+
+  // 달력 히트맵 (독립 월 선택)
+  buildCalMonthSel();
+  renderCalendar();
+
+  // 일일매출 vs 모두의주차 비교 (필터 범위, 최소 2025-07~)
+  destroyChart('modu-compare');
+  const compCtx = document.getElementById('chart-modu-compare').getContext('2d');
+  const compStart = effectiveStartYm >= '2025-07' ? effectiveStartYm : '2025-07';
+  const compData = DATA.sales_monthly.filter(d=>d.ym>=compStart && d.ym<=effectiveEndYm);
+  charts['modu-compare'] = new Chart(compCtx, {
+    type:'line',
+    data:{
+      labels: compData.map(d=>d.ym),
+      datasets:[
+        { label:'일일매출', data: compData.map(d=>d['일일매출']/10000), borderColor:'#8B5CF6', tension:0.3 },
+        { label:'모두의주차', data: compData.map(d=>d['모두의주차']/10000), borderColor:'#06B6D4', tension:0.3 }
+      ]
+    },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'top'}, zoom:ZOOM_PLUGIN }, scales:{ y:{ title:{ display:true, text:'만원' } } } }
+  });
+
+  // 비중 바 차트
+  destroyChart('modu-share');
+  const shareCtx = document.getElementById('chart-modu-share').getContext('2d');
+  const shareData = DATA.sales_monthly.filter(d=>d['모두의주차']>0 && inRange(d.ym));
+  charts['modu-share'] = new Chart(shareCtx, {
+    type:'bar',
+    data:{
+      labels: shareData.map(d=>d.ym),
+      datasets:[{ label:'모두의주차 비중(%)', data: shareData.map(d=>(d['모두의주차']/d.total*100).toFixed(1)), backgroundColor:'#06B6D4' }]
+    },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'top'}, zoom:ZOOM_PLUGIN }, scales:{ y:{ title:{ display:true, text:'%' }, max:50 } } }
+  });
+
+  // Phase 카드
+  renderPhaseCards();
+  // 현행 요금표
+  renderPriceTable();
+}
+
+function buildCalMonthSel() {
+  const sel = document.getElementById('cal-month-sel');
+  if(sel.options.length>0) return;
+  const months = [...new Set(DATA.modu_daily.map(d=>d.date.slice(0,7)))].sort();
+  months.forEach(ym => sel.add(new Option(ym, ym)));
+  sel.value = months[months.length-1];
+  sel.addEventListener('change', renderCalendar);
+}
+
+function renderCalendar() {
+  const sel = document.getElementById('cal-month-sel');
+  const ym = sel.value;
+  const [yr, mo] = ym.split('-').map(Number);
+  const dayData = {};
+  DATA.modu_daily.filter(d=>d.date.startsWith(ym)).forEach(d=>{
+    const day = parseInt(d.date.slice(8,10));
+    dayData[day] = d.sales;
+  });
+  const maxSales = Math.max(0, ...Object.values(dayData));
+  const firstDay = new Date(yr, mo-1, 1).getDay(); // 0=일
+  const daysInMonth = new Date(yr, mo, 0).getDate();
+  // 월요일 시작으로 조정 (0=월 ... 6=일)
+  const startOffset = (firstDay+6)%7;
+
+  const cal = document.getElementById('modu-calendar');
+  cal.innerHTML = '';
+  const dayLabels = ['월','화','수','목','금','토','일'];
+  dayLabels.forEach(l => {
+    const d = document.createElement('div');
+    d.className='cal-day-label'; d.textContent=l; cal.appendChild(d);
+  });
+  for(let i=0;i<startOffset;i++) {
+    const e=document.createElement('div'); e.className='cal-cell empty'; cal.appendChild(e);
+  }
+  for(let day=1;day<=daysInMonth;day++) {
+    const cell = document.createElement('div');
+    const sales = dayData[day]||0;
+    let cls = 'cal-cell';
+    if(sales>0) {
+      const ratio = maxSales>0 ? sales/maxSales : 0;
+      if(ratio<0.3) cls+=' low';
+      else if(ratio<0.65) cls+=' mid';
+      else cls+=' high';
+    }
+    cell.className=cls;
+    cell.innerHTML = `<span class="cal-date">${day}</span><span class="cal-amt">${sales>0?(sales/10000).toFixed(1)+'만':''}</span>`;
+    cal.appendChild(cell);
+  }
+}
+
+function renderPhaseCards() {
+  const container = document.getElementById('phase-cards');
+  const phases = DATA.modu_pricing_history.phases;
+  container.innerHTML = phases.map((ph,i) => {
+    const isLast = ph.end_date===null;
+    const dateRange = isLast ? ph.date+' ~' : ph.date+' ~ '+ph.end_date;
+    const changesList = ph.changes.map(c => {
+      if(c.price) return `<li>${c.name}: ${c.price.toLocaleString()}원 / 일${c.daily_limit}매</li>`;
+      return `<li>${c.name}: ${c.before||''} → ${c.after||''} ${c.reason?'('+c.reason+')':''}</li>`;
+    }).join('');
+    return `<div class="phase-card${isLast?' current':''}">
+      <h4>Phase ${ph.phase}: ${ph.label}</h4>
+      <div class="phase-date">${dateRange}</div>
+      <ul>${changesList}</ul>
+      ${ph.note?`<div class="phase-note">${ph.note}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function renderPriceTable() {
+  const tbody = document.querySelector('#price-table tbody');
+  tbody.innerHTML = DATA.modu_pricing_history.current.products.map(p =>
+    `<tr><td>${p.name}${p.note?` <small style="color:#EF4444">${p.note}</small>`:''}</td><td>${p.price.toLocaleString()}원</td><td>${p.daily_limit}매</td><td>${p.hours}</td><td>${p.note||''}</td></tr>`
+  ).join('');
+}
+
+// ======= ④ 통합 교차 분석 =======
+function renderCross() {
+  const salesData = getFilteredSales();
+  const inoutData = getFilteredInout();
+
+  // 두 데이터의 공통 ym
+  const ymSet = new Set(salesData.map(d=>d.ym));
+  const combined = inoutData.filter(d=>ymSet.has(d.ym)).map(d => {
+    const s = salesData.find(x=>x.ym===d.ym);
+    return { ym:d.ym, sales: s?s['일일매출']:0, cash: d.cash_amt, paid_cnt: d.paid_cnt,
+      regular: s?(s['입주사']+s['직원정기']+s['일반정기']):0 };
+  });
+
+  // 일일매출 vs 현장결제
+  destroyChart('cross-cashvssales');
+  const ctx1 = document.getElementById('chart-cross-cashvssales').getContext('2d');
+  charts['cross-cashvssales'] = new Chart(ctx1, {
+    type:'bar',
+    data:{
+      labels: combined.map(d=>d.ym),
+      datasets:[
+        { label:'일일매출', data: combined.map(d=>d.sales/10000), backgroundColor:'#8B5CF6' },
+        { label:'현장결제', data: combined.map(d=>d.cash/10000), backgroundColor:'#3B82F6' },
+        { type:'line', label:'차이', data: combined.map(d=>(d.sales-d.cash)/10000), borderColor:'#EF4444', backgroundColor:'transparent', tension:0.3, yAxisID:'y2' }
+      ]
+    },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'top'}, zoom:ZOOM_PLUGIN }, scales:{ x:{ ticks:{ maxRotation:90, font:{size:9} } }, y:{ title:{display:true,text:'만원'} }, y2:{ position:'right', title:{display:true,text:'차이(만원)'}, grid:{ drawOnChartArea:false } } } }
+  });
+
+  // 건당 평균
+  destroyChart('cross-avg');
+  const ctx2 = document.getElementById('chart-cross-avg').getContext('2d');
+  charts['cross-avg'] = new Chart(ctx2, {
+    type:'line',
+    data:{
+      labels: combined.map(d=>d.ym),
+      datasets:[{ label:'건당 평균(일일매출/유료건수)', data: combined.map(d=>d.paid_cnt>0?Math.round(d.sales/d.paid_cnt):null), borderColor:'#06B6D4', tension:0.3, spanGaps:true }]
+    },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'top'}, zoom:ZOOM_PLUGIN, tooltip:{ callbacks:{ label: ctx => ctx.raw!=null?ctx.raw.toLocaleString()+'원':'-' } } }, scales:{ x:{ ticks:{ maxRotation:90, font:{size:9} } }, y:{ title:{display:true,text:'원'} } } }
+  });
+
+  // 정기 안정성
+  destroyChart('cross-regular');
+  const ctx3 = document.getElementById('chart-cross-regular').getContext('2d');
+  charts['cross-regular'] = new Chart(ctx3, {
+    type:'line',
+    data:{
+      labels: salesData.map(d=>d.ym),
+      datasets:[
+        { label:'입주사', data: salesData.map(d=>d['입주사']/10000), borderColor:COLORS['입주사'], tension:0.3 },
+        { label:'직원정기', data: salesData.map(d=>d['직원정기']/10000), borderColor:COLORS['직원정기'], tension:0.3 },
+        { label:'일반정기', data: salesData.map(d=>d['일반정기']/10000), borderColor:COLORS['일반정기'], tension:0.3 },
+        { label:'정기합계', data: salesData.map(d=>(d['입주사']+d['직원정기']+d['일반정기'])/10000), borderColor:'#1F4E79', borderWidth:2.5, tension:0.3 }
+      ]
+    },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'top', labels:{font:{size:10}}}, zoom:ZOOM_PLUGIN }, scales:{ x:{ ticks:{ maxRotation:90, font:{size:9} } }, y:{ title:{display:true,text:'만원'} } } }
+  });
+}
+
+// ======= 전체 렌더링 =======
+function renderAll() {
+  renderSales();
+  renderInout();
+  renderModu();
+  renderCross();
+}
+
+// 초기화
+initFilters();
+renderAll();
+</script>
+</body>
+</html>
+
