@@ -280,7 +280,7 @@ function sT(k){if(tSK===k)tSA=!tSA;else{tSK=k;tSA=true;}rT();}
 function rT(){
   const s=document.getElementById('ts').value.toLowerCase();
   const md=+document.getElementById('td').value;
-  let d=gT().filter(t=>{if(t.dist>md)return false;if(tOpenOnly&&(!t.open||t.soldout)&&!t.lot.includes(MY_LOT))return false;if(tFlt==='night'&&!t.name.includes('심야'))return false;if(tFlt==='day'&&!t.name.includes('당일'))return false;if(tFlt==='hour'&&!/(시간|h)/i.test(t.name))return false;if(tFlt==='month'&&!t.name.includes('월'))return false;if(tExMech&&t.lot.includes('기계식'))return false;if(s&&!t.lot.toLowerCase().includes(s)&&!t.name.toLowerCase().includes(s))return false;return true;});
+  let d=gT().filter(t=>{if(t.dist>md)return false;if(tOpenOnly&&(!t.open||t.soldout))return false;if(tFlt==='night'&&!t.name.includes('심야'))return false;if(tFlt==='day'&&!t.name.includes('당일'))return false;if(tFlt==='hour'&&!/(시간|h)/i.test(t.name))return false;if(tFlt==='month'&&!t.name.includes('월'))return false;if(tExMech&&t.lot.includes('기계식'))return false;if(s&&!t.lot.toLowerCase().includes(s)&&!t.name.toLowerCase().includes(s))return false;return true;});
   d.sort((a,b)=>{let av=a[tSK],bv=b[tSK];if(typeof av==='string')return tSA?av.localeCompare(bv):bv.localeCompare(av);return tSA?av-bv:bv-av;});
   const km={lot:0,dist:1,name:2,price:3};
   [0,1,2,3].forEach(i=>{const th=document.getElementById('th'+i);th.className='';if(km[tSK]===i)th.className=tSA?'sa':'sd';});
