@@ -7,6 +7,8 @@ on:
     - cron: '0 1 * * *'   # KST 10:00
     - cron: '0 2 * * *'   # KST 11:00
     - cron: '0 3 * * *'   # KST 12:00
+    - cron: '0 6 * * *'   # KST 15:00
+    - cron: '0 8 * * *'   # KST 17:00
   workflow_dispatch:
   push:
     branches: [main]
