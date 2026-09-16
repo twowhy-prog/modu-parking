@@ -1044,6 +1044,12 @@ if __name__ == "__main__":
     print(f"  주차장 {len(lots)}개 / 할인권 {len(tickets)}개 수집")
 
     old_snap = load_snap()
+    if is_default and not lots and old_snap and old_snap.get("data"):
+        raise RuntimeError(
+            f"API 응답에 주차장이 0개입니다 (직전 스냅샷 {len(old_snap['data'])}개). "
+            "API 일시 장애로 판단하여 스냅샷/시트/대시보드 갱신을 건너뜁니다."
+        )
+
     changes  = compare(old_snap, lots, tickets)
 
     # 스냅샷 이력 관리 (최대 365개) — 기본 모드에서만 저장
